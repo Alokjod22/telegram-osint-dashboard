@@ -3,70 +3,569 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OSINT Bot Admin Dashboard</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <title>NEXUS OSINT ó Bot Telemetry & Admin Command Center</title>
+    <!-- Bootstrap 5 & FontAwesome 6 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- Chart.js & Vis.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+
     <style>
-        body { background-color: #0f172a; color: #f8fafc; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        .card { background-color: #1e293b; border: 1px solid #334155; color: #f8fafc; }
-        .navbar { background-color: #1e293b; border-bottom: 1px solid #334155; }
-        .stat-value { font-size: 2.2rem; font-weight: bold; color: #38bdf8; }
+        :root {
+            --bg-main: #090d16;
+            --card-bg: #111827;
+            --card-border: #1f2937;
+            --card-hover: #1e293b;
+            --neon-blue: #38bdf8;
+            --neon-cyan: #00f5d4;
+            --neon-emerald: #10b981;
+            --neon-purple: #a855f7;
+            --text-muted: #94a3b8;
+        }
+
+        body {
+            background-color: var(--bg-main);
+            color: #f8fafc;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            min-height: 100vh;
+        }
+
+        .mono { font-family: 'JetBrains Mono', monospace; }
+
+        /* Navbar */
+        .navbar-cyber {
+            background: rgba(17, 24, 39, 0.85);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--card-border);
+        }
+
+        /* Nav Pills */
+        .nav-pills .nav-link {
+            color: var(--text-muted);
+            border-radius: 8px;
+            padding: 8px 16px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        .nav-pills .nav-link.active {
+            background: linear-gradient(135deg, #0284c7, #0369a1);
+            color: #ffffff;
+            box-shadow: 0 4px 12px rgba(2, 132, 199, 0.35);
+        }
+
+        /* Glassmorphism Cards */
+        .cyber-card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 12px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .cyber-card:hover {
+            border-color: #334155;
+        }
+
+        /* Metric Highlights */
+        .metric-value {
+            font-size: 2.3rem;
+            font-weight: 800;
+            letter-spacing: -1px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .metric-label {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+
+        /* Tables */
+        .table-cyber {
+            --bs-table-bg: transparent;
+            color: #f1f5f9;
+        }
+        .table-cyber th {
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid var(--card-border);
+            padding: 12px 16px;
+        }
+        .table-cyber td {
+            padding: 14px 16px;
+            border-bottom: 1px solid #1e293b;
+            vertical-align: middle;
+        }
+        .table-cyber tr:hover td {
+            background-color: rgba(30, 41, 59, 0.5);
+        }
+
+        /* User Avatars */
+        .avatar-circle {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 0.95rem;
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            color: white;
+        }
+
+        /* Badges */
+        .badge-verified {
+            background-color: rgba(16, 185, 129, 0.15);
+            color: #34d399;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+        .badge-pending {
+            background-color: rgba(245, 158, 11, 0.15);
+            color: #fbbf24;
+            border: 1px solid rgba(245, 158, 11, 0.3);
+        }
+
+        /* Vis Network Canvas */
+        #network-canvas {
+            width: 100%;
+            height: 450px;
+            background: #0b1120;
+            border-radius: 8px;
+            border: 1px solid var(--card-border);
+        }
     </style>
 </head>
 <body>
-    <nav class="navbar navbar-dark mb-4">
-        <div class="container-fluid">
-            <span class="navbar-brand mb-0 h1">üîç Telegram OSINT Research Dashboard</span>
+    <!-- Top Navbar -->
+    <nav class="navbar navbar-cyber sticky-top px-4 py-3">
+        <div class="container-fluid d-flex justify-content-between align-items-center">
+            <div class="d-flex align-items-center gap-3">
+                <div class="avatar-circle" style="background: linear-gradient(135deg, #06b6d4, #3b82f6);">
+                    <i class="fa-solid fa-radar"></i>
+                </div>
+                <div>
+                    <h5 class="mb-0 fw-bold text-white">NEXUS OSINT <span class="badge bg-primary fs-7">v2.4 Live</span></h5>
+                    <small class="text-muted">Autonomous Telegram Research & Telemetry Hub</small>
+                </div>
+            </div>
+            <div class="d-flex align-items-center gap-3">
+                <span class="badge rounded-pill bg-success-subtle text-success border border-success-subtle px-3 py-2">
+                    <i class="fa-solid fa-circle-dot me-1"></i> Engine Online ï Render Cloud
+                </span>
+                <a href="https://t.me/Ruk_research_bot" target="_blank" class="btn btn-sm btn-outline-info">
+                    <i class="fa-brands fa-telegram me-1"></i> Open Bot
+                </a>
+            </div>
         </div>
     </nav>
 
-    <div class="container">
-        <div class="row g-4 mb-4">
-            <div class="col-md-3">
-                <div class="card p-3">
-                    <h5>Active Investigations</h5>
-                    <div class="stat-value">{{ stats.active_investigations }}</div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="card p-3">
-                    <h5>Total Searches</h5>
-                    <div class="stat-value">{{ stats.total_searches }}</div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="card p-3">
-                    <h5>Active Sources</h5>
-                    <div class="stat-value">{{ stats.active_sources }}</div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="card p-3">
-                    <h5>Reports Generated</h5>
-                    <div class="stat-value">{{ stats.reports_generated }}</div>
-                </div>
-            </div>
-        </div>
+    <!-- Main Container -->
+    <div class="container-fluid px-4 py-4">
+        <!-- Navigation Pills -->
+        <ul class="nav nav-pills mb-4" id="mainTab" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="overview-tab" data-bs-toggle="pill" data-bs-target="#overview" type="button">
+                    <i class="fa-solid fa-chart-pie me-2"></i> Overview & Telemetry
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="users-tab" data-bs-toggle="pill" data-bs-target="#users" type="button">
+                    <i class="fa-solid fa-users-viewfinder me-2"></i> Bot Users & Phone Directory
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="terminal-tab" data-bs-toggle="pill" data-bs-target="#terminal" type="button">
+                    <i class="fa-solid fa-terminal me-2"></i> Web OSINT Terminal
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="graph-tab" data-bs-toggle="pill" data-bs-target="#graph" type="button">
+                    <i class="fa-solid fa-circle-nodes me-2"></i> Interactive Link Graph
+                </button>
+            </li>
+        </ul>
 
-        <div class="card p-4">
-            <h4 class="mb-3">System Overview & Source Health</h4>
-            <table class="table table-dark table-striped">
-                <thead>
-                    <tr>
-                        <th>Source Adapter</th>
-                        <th>Type</th>
-                        <th>Status</th>
-                        <th>Latency</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr><td>Domain & DNS Adapter</td><td>DNS / RDAP / HTTP</td><td><span class="badge bg-success">ACTIVE</span></td><td>120ms</td></tr>
-                    <tr><td>Username Intelligence</td><td>Web Scraping / API</td><td><span class="badge bg-success">ACTIVE</span></td><td>340ms</td></tr>
-                    <tr><td>Phone Metadata Adapter</td><td>E.164 / Country Code</td><td><span class="badge bg-success">ACTIVE</span></td><td>45ms</td></tr>
-                    <tr><td>Web & News Engine</td><td>Search Engine / RSS</td><td><span class="badge bg-success">ACTIVE</span></td><td>210ms</td></tr>
-                    <tr><td>Document Parser</td><td>PDF / TXT / JSON</td><td><span class="badge bg-success">ACTIVE</span></td><td>15ms</td></tr>
-                </tbody>
-            </table>
+        <!-- Tab Content -->
+        <div class="tab-content" id="mainTabContent">
+            
+            <!-- TAB 1: OVERVIEW -->
+            <div class="tab-pane fade show active" id="overview" role="tabpanel">
+                <!-- KPI Cards -->
+                <div class="row g-4 mb-4">
+                    <div class="col-xl-3 col-md-6">
+                        <div class="cyber-card p-4">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <span class="metric-label">Total Bot Users</span>
+                                <i class="fa-solid fa-users text-info fs-5"></i>
+                            </div>
+                            <div class="metric-value text-info" id="kpi-users">{{ stats.total_users }}</div>
+                            <small class="text-muted"><i class="fa-solid fa-bolt text-warning me-1"></i> Tracked in SQLite / Postgres</small>
+                        </div>
+                    </div>
+                    <div class="col-xl-3 col-md-6">
+                        <div class="cyber-card p-4">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <span class="metric-label">Verified Phone Accounts</span>
+                                <i class="fa-solid fa-phone-shield text-success fs-5"></i>
+                            </div>
+                            <div class="metric-value text-success" id="kpi-verified">{{ stats.verified_users }}</div>
+                            <small class="text-muted"><i class="fa-solid fa-shield-halved text-success me-1"></i> Telegram Contact Verified</small>
+                        </div>
+                    </div>
+                    <div class="col-xl-3 col-md-6">
+                        <div class="cyber-card p-4">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <span class="metric-label">Total OSINT Queries</span>
+                                <i class="fa-solid fa-magnifying-glass text-warning fs-5"></i>
+                            </div>
+                            <div class="metric-value text-warning" id="kpi-queries">{{ stats.total_queries }}</div>
+                            <small class="text-muted"><i class="fa-solid fa-arrow-trend-up text-info me-1"></i> Live Activity Volume</small>
+                        </div>
+                    </div>
+                    <div class="col-xl-3 col-md-6">
+                        <div class="cyber-card p-4">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <span class="metric-label">Abuse Evidence Reports</span>
+                                <i class="fa-solid fa-file-shield text-danger fs-5"></i>
+                            </div>
+                            <div class="metric-value text-danger" id="kpi-reports">{{ stats.total_reports }}</div>
+                            <small class="text-muted"><i class="fa-solid fa-fingerprint text-danger me-1"></i> Deduplicated SHA-256</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Charts Row -->
+                <div class="row g-4 mb-4">
+                    <div class="col-lg-8">
+                        <div class="cyber-card p-4 h-100">
+                            <h6 class="fw-bold mb-3"><i class="fa-solid fa-chart-line text-info me-2"></i> Query Velocity & User Activity</h6>
+                            <canvas id="activityChart" height="110"></canvas>
+                        </div>
+                    </div>
+                    <div class="col-lg-4">
+                        <div class="cyber-card p-4 h-100">
+                            <h6 class="fw-bold mb-3"><i class="fa-solid fa-layer-group text-primary me-2"></i> Source Adapters Status</h6>
+                            <ul class="list-group list-group-flush bg-transparent">
+                                <li class="list-group-item bg-transparent text-white d-flex justify-content-between align-items-center border-secondary border-opacity-25 px-0">
+                                    <span><i class="fa-solid fa-globe text-info me-2"></i> Domain & DNS (A, MX, NS)</span>
+                                    <span class="badge bg-success">ACTIVE</span>
+                                </li>
+                                <li class="list-group-item bg-transparent text-white d-flex justify-content-between align-items-center border-secondary border-opacity-25 px-0">
+                                    <span><i class="fa-solid fa-at text-warning me-2"></i> Username Profiler</span>
+                                    <span class="badge bg-success">ACTIVE</span>
+                                </li>
+                                <li class="list-group-item bg-transparent text-white d-flex justify-content-between align-items-center border-secondary border-opacity-25 px-0">
+                                    <span><i class="fa-solid fa-phone text-success me-2"></i> Phone Metadata (E.164)</span>
+                                    <span class="badge bg-success">ACTIVE</span>
+                                </li>
+                                <li class="list-group-item bg-transparent text-white d-flex justify-content-between align-items-center border-secondary border-opacity-25 px-0">
+                                    <span><i class="fa-solid fa-brain text-purple me-2"></i> Gemini 2.5 AI Analyzer</span>
+                                    <span class="badge bg-success">ACTIVE</span>
+                                </li>
+                                <li class="list-group-item bg-transparent text-white d-flex justify-content-between align-items-center border-secondary border-opacity-25 px-0">
+                                    <span><i class="fa-solid fa-bullhorn text-danger me-2"></i> Admin Portal Group Sync</span>
+                                    <span class="badge bg-success">ACTIVE</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 2: USERS & PHONE DIRECTORY -->
+            <div class="tab-pane fade" id="users" role="tabpanel">
+                <div class="cyber-card p-4">
+                    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+                        <div>
+                            <h5 class="fw-bold mb-1"><i class="fa-solid fa-users-gear text-info me-2"></i> Bot User & Identity Telemetry</h5>
+                            <p class="text-muted small mb-0">Live directory of all users interacting with your Telegram Bot with Phone Numbers & Activity.</p>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <input type="text" id="userSearchInput" class="form-control form-control-sm bg-dark text-white border-secondary" placeholder="Filter by username / phone..." style="width: 250px;">
+                            <button class="btn btn-sm btn-primary" onclick="fetchLiveUsers()"><i class="fa-solid fa-rotate me-1"></i> Refresh</button>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table table-cyber" id="usersTable">
+                            <thead>
+                                <tr>
+                                    <th>User</th>
+                                    <th>Username</th>
+                                    <th>Phone Number</th>
+                                    <th>Status</th>
+                                    <th>Queries Run</th>
+                                    <th>Reports</th>
+                                    <th>First Seen</th>
+                                    <th>Last Active</th>
+                                </tr>
+                            </thead>
+                            <tbody id="usersTableBody">
+                                {% for u in users %}
+                                <tr>
+                                    <td>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <div class="avatar-circle">{{ (u.first_name or 'U')[0] }}</div>
+                                            <div>
+                                                <div class="fw-bold">{{ u.first_name }} {{ u.last_name or '' }}</div>
+                                                <small class="text-muted mono">ID: {{ u.telegram_id }}</small>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        {% if u.username %}
+                                            <a href="https://t.me/{{ u.username }}" target="_blank" class="text-info fw-semibold text-decoration-none">
+                                                @{{ u.username }}
+                                            </a>
+                                        {% else %}
+                                            <span class="text-muted">None</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if u.phone_number %}
+                                            <span class="badge badge-verified px-2 py-1 mono fs-7">
+                                                <i class="fa-solid fa-phone me-1"></i> {{ u.phone_number }}
+                                            </span>
+                                        {% else %}
+                                            <span class="badge badge-pending px-2 py-1">
+                                                <i class="fa-solid fa-hourglass-start me-1"></i> Not Shared
+                                            </span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if u.is_verified %}
+                                            <span class="badge bg-success"><i class="fa-solid fa-check-double me-1"></i> Verified</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">Standard</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <span class="mono fw-bold">{{ u.query_count or 0 }}</span>
+                                            <div class="progress flex-grow-1" style="height: 6px; background: #1e293b;">
+                                                <div class="progress-bar bg-info" style="width: {{ [((u.query_count or 0) * 10), 100] | min }}%;"></div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td><span class="badge bg-dark border border-secondary mono">{{ u.report_count or 0 }}</span></td>
+                                    <td class="text-muted small">{{ u.first_seen.strftime('%Y-%m-%d %H:%M') if u.first_seen else 'N/A' }}</td>
+                                    <td class="mono text-info small">{{ u.last_active.strftime('%Y-%m-%d %H:%M') if u.last_active else 'N/A' }}</td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="8" class="text-center py-4 text-muted">
+                                        <i class="fa-solid fa-inbox fs-3 mb-2 d-block"></i> No users logged yet. Users will appear here automatically when they message @Ruk_research_bot.
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 3: WEB OSINT TERMINAL -->
+            <div class="tab-pane fade" id="terminal" role="tabpanel">
+                <div class="row g-4">
+                    <div class="col-lg-5">
+                        <div class="cyber-card p-4">
+                            <h5 class="fw-bold mb-3"><i class="fa-solid fa-magnifying-glass text-info me-2"></i> Query Dispatcher</h5>
+                            <div class="mb-3">
+                                <label class="form-label text-muted small fw-semibold">Target Entity / Query</label>
+                                <input type="text" id="terminalQuery" class="form-control bg-dark text-white border-secondary mono" placeholder="e.g. example.com, @johndoe, +14155552671">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label text-muted small fw-semibold">Lookup Type</label>
+                                <select id="terminalType" class="form-select bg-dark text-white border-secondary">
+                                    <option value="AUTO">Auto Detect Entity</option>
+                                    <option value="DOMAIN">Domain & DNS Intel</option>
+                                    <option value="USERNAME">Username Footprinting</option>
+                                    <option value="PHONE">Phone Number E.164</option>
+                                </select>
+                            </div>
+                            <button class="btn btn-primary w-100 py-2 fw-semibold" id="btnExecuteSearch" onclick="runWebSearch()">
+                                <i class="fa-solid fa-play me-2"></i> Execute Live OSINT Investigation
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-lg-7">
+                        <div class="cyber-card p-4">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h6 class="fw-bold mb-0"><i class="fa-solid fa-code text-success me-2"></i> Raw Intelligence Output</h6>
+                                <span class="badge bg-secondary" id="searchStatus">IDLE</span>
+                            </div>
+                            <pre id="terminalOutput" class="bg-black p-3 rounded text-info mono small" style="max-height: 420px; overflow-y: auto;">// Run a search query on the left to see live structured intelligence results...</pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 4: INTERACTIVE GRAPH -->
+            <div class="tab-pane fade" id="graph" role="tabpanel">
+                <div class="cyber-card p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div>
+                            <h5 class="fw-bold mb-1"><i class="fa-solid fa-network-wired text-primary me-2"></i> Entity Relationship Topology</h5>
+                            <small class="text-muted">Graph visualization linking Telegram Users, Channels, and OSINT investigation nodes.</small>
+                        </div>
+                        <button class="btn btn-sm btn-outline-info" onclick="loadNetworkGraph()"><i class="fa-solid fa-rotate me-1"></i> Redraw Graph</button>
+                    </div>
+                    <div id="network-canvas"></div>
+                </div>
+            </div>
+
         </div>
     </div>
+
+    <!-- Bootstrap Bundle JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        // Initialize Activity Chart
+        const ctx = document.getElementById('activityChart').getContext('2d');
+        const activityChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: ['18:00', '19:00', '20:00', '21:00', '22:00', 'Now'],
+                datasets: [{
+                    label: 'OSINT Queries',
+                    data: [12, 19, 32, 28, 45, {{ stats.total_queries or 52 }}],
+                    borderColor: '#38bdf8',
+                    backgroundColor: 'rgba(56, 189, 248, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { grid: { color: '#1e293b' }, ticks: { color: '#94a3b8' } },
+                    y: { grid: { color: '#1e293b' }, ticks: { color: '#94a3b8' } }
+                }
+            }
+        });
+
+        // Live Search Terminal Function
+        async function runWebSearch() {
+            const query = document.getElementById('terminalQuery').value.trim();
+            if (!query) return alert("Please enter a query!");
+
+            const btn = document.getElementById('btnExecuteSearch');
+            const status = document.getElementById('searchStatus');
+            const output = document.getElementById('terminalOutput');
+
+            btn.disabled = true;
+            status.className = "badge bg-warning";
+            status.innerText = "INVESTIGATING...";
+            output.innerText = `[+] Dispatching OSINT research adapters for: ${query}...\n[+] Resolving DNS / WHOIS / Usernames...\n[+] Running AI entity correlation...\n`;
+
+            try {
+                const resp = await fetch('/api/search', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: query, search_type: document.getElementById('terminalType').value })
+                });
+                const data = await resp.json();
+                output.innerText = JSON.stringify(data, null, 2);
+                status.className = "badge bg-success";
+                status.innerText = "COMPLETED";
+            } catch (err) {
+                output.innerText = `[-] Search Error: ${err}`;
+                status.className = "badge bg-danger";
+                status.innerText = "FAILED";
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        // Fetch Live Users Function
+        async function fetchLiveUsers() {
+            try {
+                const resp = await fetch('/api/users');
+                const users = await resp.json();
+                const tbody = document.getElementById('usersTableBody');
+                if (users.length === 0) return;
+
+                tbody.innerHTML = users.map(u => `
+                    <tr>
+                        <td>
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="avatar-circle">${(u.name || 'U')[0]}</div>
+                                <div>
+                                    <div class="fw-bold">${u.name}</div>
+                                    <small class="text-muted mono">ID: ${u.telegram_id}</small>
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            ${u.username ? `<a href="https://t.me/${u.username}" target="_blank" class="text-info fw-semibold text-decoration-none">@${u.username}</a>` : `<span class="text-muted">None</span>`}
+                        </td>
+                        <td>
+                            ${u.phone_number ? `<span class="badge badge-verified px-2 py-1 mono fs-7"><i class="fa-solid fa-phone me-1"></i> ${u.phone_number}</span>` : `<span class="badge badge-pending px-2 py-1"><i class="fa-solid fa-hourglass-start me-1"></i> Not Shared</span>`}
+                        </td>
+                        <td>
+                            ${u.is_verified ? `<span class="badge bg-success"><i class="fa-solid fa-check-double me-1"></i> Verified</span>` : `<span class="badge bg-secondary">Standard</span>`}
+                        </td>
+                        <td>
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="mono fw-bold">${u.query_count}</span>
+                                <div class="progress flex-grow-1" style="height: 6px; background: #1e293b;">
+                                    <div class="progress-bar bg-info" style="width: ${Math.min(u.query_count * 10, 100)}%;"></div>
+                                </div>
+                            </div>
+                        </td>
+                        <td><span class="badge bg-dark border border-secondary mono">${u.report_count}</span></td>
+                        <td class="text-muted small">${u.first_seen}</td>
+                        <td class="mono text-info small">${u.last_active}</td>
+                    </tr>
+                `).join('');
+            } catch (err) {
+                console.error("Failed to fetch users", err);
+            }
+        }
+
+        // Interactive Vis.js Network Graph
+        function loadNetworkGraph() {
+            const container = document.getElementById('network-canvas');
+            fetch('/api/network-graph')
+                .then(r => r.json())
+                .then(data => {
+                    const options = {
+                        nodes: {
+                            font: { color: '#f8fafc', face: 'Inter' },
+                            color: { background: '#1e293b', border: '#38bdf8' }
+                        },
+                        edges: {
+                            color: '#475569',
+                            arrows: { to: { enabled: true } }
+                        },
+                        physics: {
+                            stabilization: true,
+                            barnesHut: { springLength: 100 }
+                        }
+                    };
+                    new vis.Network(container, data, options);
+                })
+                .catch(err => console.error(err));
+        }
+
+        // Auto load network graph when tab clicked
+        document.getElementById('graph-tab').addEventListener('shown.bs.tab', loadNetworkGraph);
+
+        // Filter users
+        document.getElementById('userSearchInput')?.addEventListener('input', function(e) {
+            const term = e.target.value.toLowerCase();
+            document.querySelectorAll('#usersTableBody tr').forEach(row => {
+                row.style.display = row.innerText.toLowerCase().includes(term) ? '' : 'none';
+            });
+        });
+    </script>
 </body>
 </html>

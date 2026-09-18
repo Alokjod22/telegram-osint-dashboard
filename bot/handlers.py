@@ -1,15 +1,16 @@
 import json
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup, BotCommand
 from telegram.ext import ContextTypes
 from engine.research_manager import ResearchManager
 from engine.abuse_reporter import AbuseReporter
+from database.user_manager import record_user_activity
 
 research_manager = ResearchManager()
 
 async def setup_bot_commands(application):
     """Register command suggestions in Telegram UI so typing / shows all available commands."""
     commands = [
-        BotCommand("start", "Start the OSINT Research Bot"),
+        BotCommand("start", "Start the OSINT Research Bot & Verify Account"),
         BotCommand("search", "Quick OSINT lookup (Domain, Username, Phone, Web)"),
         BotCommand("research", "Deep OSINT investigation & AI entity analysis"),
         BotCommand("report", "Collect evidence & draft policy violation report"),
@@ -23,51 +24,117 @@ async def setup_bot_commands(application):
 
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    welcome_text = """üîç **Telegram OSINT Research Bot Platform**
+    user = update.effective_user
+    if user:
+        await record_user_activity(
+            telegram_id=str(user.id),
+            username=user.username,
+            first_name=user.first_name,
+            last_name=user.last_name
+        )
 
-Welcome to your general-purpose Public-Source Intelligence Assistant.
+    welcome_text = f"""?? **Telegram OSINT Research Bot Platform**
 
-üìå **All Commands List** (Type `/` to view in menu):
-‚Ä¢ `/search <query>` ‚Äî Quick lookup for Domain, Username, Phone, or Web
-‚Ä¢ `/research <query>` ‚Äî Deep OSINT analysis with AI entity correlation
-‚Ä¢ `/report <url> <category_id> <evidence>` ‚Äî Draft policy violation evidence report
-‚Ä¢ `/sources` ‚Äî View connected public data source adapters
-‚Ä¢ `/history` ‚Äî View past research investigations
-‚Ä¢ `/settings` ‚Äî View active API configurations
-‚Ä¢ `/export <inv_id>` ‚Äî Download full report package
-‚Ä¢ `/help` ‚Äî Display usage instructions
+Welcome {user.first_name if user else 'User'}! This is your Public-Source Intelligence & Abuse Reporting Assistant.
+
+?? **All Commands List** (Type / to view in menu):
+ï /search <query> ó Quick lookup for Domain, Username, Phone, or Web
+ï /research <query> ó Deep OSINT analysis with AI entity correlation
+ï /report <url> <category_id> <evidence> ó Draft policy violation evidence report
+ï /sources ó View connected public data source adapters
+ï /history ó View past research investigations
+ï /settings ó View active API configurations
+ï /export <inv_id> ó Download full report package
+ï /help ó Display usage instructions
+
+?? *Tip: Click "Link / Verify Phone Number" below to authenticate your identity in the Admin Web Portal.*
 """
-    keyboard = [
-        [InlineKeyboardButton("üîç Quick Search", callback_data="menu_search"), InlineKeyboardButton("üìä Deep Research", callback_data="menu_research")],
-        [InlineKeyboardButton("üìë Report Violation", callback_data="menu_report"), InlineKeyboardButton("üìö Sources", callback_data="menu_sources")]
+    inline_keyboard = [
+        [InlineKeyboardButton("?? Quick Search", callback_data="menu_search"), InlineKeyboardButton("?? Deep Research", callback_data="menu_research")],
+        [InlineKeyboardButton("?? Report Violation", callback_data="menu_report"), InlineKeyboardButton("?? Sources", callback_data="menu_sources")]
     ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
+    reply_markup = InlineKeyboardMarkup(inline_keyboard)
+
+    # Persistent keyboard offering Phone Verification
+    reply_keyboard = [
+        [KeyboardButton("?? Link / Verify Phone Number", request_contact=True)]
+    ]
+    contact_markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True, one_time_keyboard=False)
+
     await update.message.reply_text(welcome_text, parse_mode="Markdown", reply_markup=reply_markup)
+    await update.message.reply_text("?? *Account Verification Options:*", parse_mode="Markdown", reply_markup=contact_markup)
+
+
+async def contact_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    contact = update.message.contact
+    user = update.effective_user
+    if contact and user:
+        phone = contact.phone_number
+        await record_user_activity(
+            telegram_id=str(user.id),
+            username=user.username,
+            first_name=user.first_name,
+            last_name=user.last_name,
+            phone_number=phone
+        )
+        msg = (
+            f"? **Account & Phone Verified!**\n\n"
+            f"?? **Name**: {user.first_name}\n"
+            f"??? **Username**: @{user.username or 'None'}\n"
+            f"?? **Phone**: {phone}\n"
+            f"?? **Telegram ID**: {user.id}\n\n"
+            f"Your user profile is now verified and logged in the Admin Web Portal."
+        )
+        await update.message.reply_text(msg, parse_mode="Markdown")
+
+        # Notify Admin Group
+        try:
+            from config import settings
+            admin_notice = (
+                f"?? **ADMIN AUDIT: NEW VERIFIED USER**\n\n"
+                f"ï **Name**: {user.first_name} {user.last_name or ''}\n"
+                f"ï **Username**: @{user.username or 'None'}\n"
+                f"ï **Phone**: {phone}\n"
+                f"ï **Telegram ID**: {user.id}"
+            )
+            await context.bot.send_message(chat_id=settings.ADMIN_CHAT_ID, text=admin_notice, parse_mode="Markdown")
+        except Exception:
+            pass
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    help_text = """‚ÑπÔ∏è **OSINT Research Bot Help & Guide**
+    help_text = """?? **OSINT Research Bot Help & Guide**
 
 **Command Reference**:
-‚Ä¢ `/search example.com` ‚Äî Inspect DNS, RDAP, HTTP security headers & sitemaps.
-‚Ä¢ `/search @username` ‚Äî Search username matches across GitHub, Twitter, Reddit, etc.
-‚Ä¢ `/search +14155552671` ‚Äî E.164 normalization, country/carrier detection.
-‚Ä¢ `/research <query>` ‚Äî Run deep OSINT research with AI entity extraction.
-‚Ä¢ `/report <url> <category_id>` ‚Äî Create deduplicated abuse evidence report.
+ï /search example.com ó Inspect DNS, RDAP, HTTP security headers & sitemaps.
+ï /search @username ó Search username matches across GitHub, Twitter, Reddit, etc.
+ï /search +14155552671 ó E.164 normalization, country/carrier detection.
+ï /research <query> ó Run deep OSINT research with AI entity extraction.
+ï /report <url> <category_id> ó Create deduplicated abuse evidence report.
 
-**Categories for `/report`**:
-`1`: Child Safety | `2`: Terrorism | `3`: Fraud/Scam | `4`: Illegal Goods | `5`: Non-consensual Content | `6`: DMCA/Copyright | `7`: General Violation
+**Categories for /report**:
+1: Child Safety | 2: Terrorism | 3: Fraud/Scam | 4: Illegal Goods | 5: Non-consensual Content | 6: DMCA/Copyright | 7: General Violation
 """
     await update.message.reply_text(help_text, parse_mode="Markdown")
 
 
 async def search_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    if user:
+        await record_user_activity(
+            telegram_id=str(user.id),
+            username=user.username,
+            first_name=user.first_name,
+            last_name=user.last_name,
+            is_query=True
+        )
+
     if not context.args:
-        await update.message.reply_text("üí° **Usage**: `/search <query>`\n\nExamples:\n‚Ä¢ `/search example.com` (Domain OSINT)\n‚Ä¢ `/search @username` (Username Search)\n‚Ä¢ `/search +14155552671` (Phone Metadata)", parse_mode="Markdown")
+        await update.message.reply_text("?? **Usage**: /search <query>\n\nExamples:\nï /search example.com (Domain OSINT)\nï /search @username (Username Search)\nï /search +14155552671 (Phone Metadata)", parse_mode="Markdown")
         return
 
     query = " ".join(context.args)
-    msg = await update.message.reply_text(f"üîç **Executing OSINT Investigation** for `{query}`...\nPlease wait while public adapters collect data.", parse_mode="Markdown")
+    msg = await update.message.reply_text(f"?? **Executing OSINT Investigation** for {query}...\nPlease wait while public adapters collect data.", parse_mode="Markdown")
 
     res = await research_manager.execute_investigation(query)
     inv_id = res["investigation_id"]
@@ -75,62 +142,72 @@ async def search_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = res["data"]
 
     # Formatted detailed output based on search type
-    output_text = f"‚úÖ **OSINT RESULTS ‚Äî {search_type}**\n\n"
-    output_text += f"**Investigation ID**: `{inv_id}`\n"
-    output_text += f"**Target Query**: `{query}`\n\n"
+    output_text = f"? **OSINT RESULTS ó {search_type}**\n\n"
+    output_text += f"**Investigation ID**: {inv_id}\n"
+    output_text += f"**Target Query**: {query}\n\n"
 
     if search_type == "DOMAIN":
         dns = data.get("dns_records", {})
-        output_text += f"üåê **DNS Records**:\n"
-        output_text += f"‚Ä¢ A: `{', '.join(dns.get('A', ['None']))}`\n"
-        output_text += f"‚Ä¢ MX: `{', '.join(dns.get('MX', ['None']))}`\n"
-        output_text += f"‚Ä¢ NS: `{', '.join(dns.get('NS', ['None']))}`\n"
-        output_text += f"‚Ä¢ Security Score: `{data.get('security_score', 0)}/100`\n"
+        output_text += f"?? **DNS Records**:\n"
+        output_text += f"ï A: {', '.join(dns.get('A', ['None']))}\n"
+        output_text += f"ï MX: {', '.join(dns.get('MX', ['None']))}\n"
+        output_text += f"ï NS: {', '.join(dns.get('NS', ['None']))}\n"
+        output_text += f"ï Security Score: {data.get('security_score', 0)}/100\n"
 
     elif search_type == "USERNAME":
         profiles = data.get("profiles", [])
-        output_text += f"üë§ **Public Profile Matches** ({len(profiles)} found):\n"
+        output_text += f"?? **Public Profile Matches** ({len(profiles)} found):\n"
         for p in profiles:
-            output_text += f"‚Ä¢ [{p['platform']}]({p['profile_url']}) (Confidence: {p['confidence']*100:.0f}%)\n"
+            output_text += f"ï [{p['platform']}]({p['profile_url']}) (Confidence: {p['confidence']*100:.0f}%)\n"
 
     elif search_type == "PHONE":
-        output_text += f"üìû **Phone Metadata**:\n"
-        output_text += f"‚Ä¢ E.164: `{data.get('normalized_e164')}`\n"
-        output_text += f"‚Ä¢ Country: `{data.get('country')}` (`{data.get('country_code')}`)\n"
-        output_text += f"‚Ä¢ Line Type: `{data.get('line_type')}`\n"
+        output_text += f"?? **Phone Metadata**:\n"
+        output_text += f"ï E.164: {data.get('normalized_e164')}\n"
+        output_text += f"ï Country: {data.get('country')} ({data.get('country_code')})\n"
+        output_text += f"ï Line Type: {data.get('line_type')}\n"
 
     else:
         web_res = data.get("web_results", [])
-        output_text += f"üì∞ **Web Search Results** ({len(web_res)} items):\n"
+        output_text += f"?? **Web Search Results** ({len(web_res)} items):\n"
         for item in web_res[:3]:
-            output_text += f"‚Ä¢ [{item['title']}]({item['url']})\n  _{item['snippet'][:100]}_\n"
+            output_text += f"ï [{item['title']}]({item['url']})\n  _{item['snippet'][:100]}_\n"
 
     if "ai_analysis" in res and "ai_analysis" in res["ai_analysis"]:
-        output_text += f"\nü§ñ **AI Executive Summary**:\n{res['ai_analysis']['ai_analysis'][:500]}\n"
+        output_text += f"\n?? **AI Executive Summary**:\n{res['ai_analysis']['ai_analysis'][:500]}\n"
 
     await msg.edit_text(output_text, parse_mode="Markdown", disable_web_page_preview=True)
 
     # Log activity live to Admin Portal Group
     try:
         from config import settings
-        user_info = f"@{update.effective_user.username}" if update.effective_user.username else f"User {update.effective_user.id}"
-        admin_log = f"üîî **ADMIN AUDIT LOG ‚Äî NEW SEARCH**\n\n‚Ä¢ **User**: {user_info}\n‚Ä¢ **Query**: `{query}`\n‚Ä¢ **Type**: `{search_type}`\n‚Ä¢ **Investigation ID**: `{inv_id}`"
+        user_info = f"@{user.username}" if user and user.username else f"User {user.id if user else 'Unknown'}"
+        admin_log = f"?? **ADMIN AUDIT LOG ó NEW SEARCH**\n\nï **User**: {user_info}\nï **Query**: {query}\nï **Type**: {search_type}\nï **Investigation ID**: {inv_id}"
         await context.bot.send_message(chat_id=settings.ADMIN_CHAT_ID, text=admin_log, parse_mode="Markdown")
     except Exception:
         pass
 
 
 async def report_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if len(context.args) < 2:
-        cat_list = "\n".join([f"`{k}`: {v}" for k, v in AbuseReporter.CATEGORIES.items()])
-        msg = f"""üìë **Automated Abuse Evidence & Reporting Assistant**
+    user = update.effective_user
+    if user:
+        await record_user_activity(
+            telegram_id=str(user.id),
+            username=user.username,
+            first_name=user.first_name,
+            last_name=user.last_name,
+            is_report=True
+        )
 
-Usage: `/report <target_url> <category_id> <evidence_details>`
+    if len(context.args) < 2:
+        cat_list = "\n".join([f"{k}: {v}" for k, v in AbuseReporter.CATEGORIES.items()])
+        msg = f"""?? **Automated Abuse Evidence & Reporting Assistant**
+
+Usage: /report <target_url> <category_id> <evidence_details>
 
 **Categories**:
 {cat_list}
 
-Example: `/report https://t.me/example_channel 3 Fraudulent activity detected`
+Example: /report https://t.me/example_channel 3 Fraudulent activity detected
 """
         await update.message.reply_text(msg, parse_mode="Markdown")
         return
@@ -144,14 +221,14 @@ Example: `/report https://t.me/example_channel 3 Fraudulent activity detected`
     review_screen = AbuseReporter.generate_review_screen(case_data)
 
     keyboard = [
-        [InlineKeyboardButton("‚úÖ Approve & Export Package", callback_data=f"export_case_{case_id}"), InlineKeyboardButton("‚ùå Cancel Case", callback_data="cancel_case")]
+        [InlineKeyboardButton("? Approve & Export Package", callback_data=f"export_case_{case_id}"), InlineKeyboardButton("? Cancel Case", callback_data="cancel_case")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text(review_screen, parse_mode="Markdown", reply_markup=reply_markup, disable_web_page_preview=True)
 
 
 async def sources_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    sources_text = """üåê **Active OSINT Data Source Adapters**:
+    sources_text = """?? **Active OSINT Data Source Adapters**:
 
 1. **Domain & DNS Resolver**: DNS (A, MX, TXT, NS), RDAP/WHOIS, HTTP Security Headers, robots.txt.
 2. **Username Search Engine**: Multi-platform lookup (GitHub, GitLab, Twitter, Reddit, Medium, Dev.to).
@@ -163,23 +240,23 @@ async def sources_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def history_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    history_text = """üìö **Recent Investigation History**:
+    history_text = """?? **Recent Investigation History**:
 
-‚Ä¢ `INV-A92F10B2` ‚Äî `example.com` (Domain OSINT)
-‚Ä¢ `INV-4C8E91A0` ‚Äî `@targetuser` (Username Search)
-‚Ä¢ `CASE-104928` ‚Äî `https://t.me/sample_channel` (Abuse Evidence Draft)
+ï INV-A92F10B2 ó example.com (Domain OSINT)
+ï INV-4C8E91A0 ó @targetuser (Username Search)
+ï CASE-104928 ó https://t.me/sample_channel (Abuse Evidence Draft)
 """
     await update.message.reply_text(history_text, parse_mode="Markdown")
 
 
 async def settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    settings_text = """‚öôÔ∏è **OSINT Platform Settings**:
+    settings_text = """?? **OSINT Platform Settings**:
 
-‚Ä¢ **Database**: SQLite / PostgreSQL (Async Engine)
-‚Ä¢ **AI Engine**: Gemini API (`gemini-2.5-flash`)
-‚Ä¢ **Max Workers**: 5 Parallel Threads
-‚Ä¢ **Rate Limit Handling**: Active
-‚Ä¢ **Dashboard Server**: `http://localhost:8000`
+ï **Database**: SQLite / PostgreSQL (Async Engine)
+ï **AI Engine**: Gemini API (gemini-2.5-flash)
+ï **Max Workers**: 5 Parallel Threads
+ï **Rate Limit Handling**: Active
+ï **Dashboard Server**: https://telegram-osint-dashboard.onrender.com
 """
     await update.message.reply_text(settings_text, parse_mode="Markdown")
 
@@ -189,14 +266,14 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     if query.data == "menu_search":
-        await query.message.reply_text("Send `/search <query>` to begin a quick lookup.", parse_mode="Markdown")
+        await query.message.reply_text("Send /search <query> to begin a quick lookup.", parse_mode="Markdown")
     elif query.data == "menu_research":
-        await query.message.reply_text("Send `/research <query>` to begin deep OSINT research.", parse_mode="Markdown")
+        await query.message.reply_text("Send /research <query> to begin deep OSINT research.", parse_mode="Markdown")
     elif query.data == "menu_report":
-        await query.message.reply_text("Send `/report <url> <category_id>` to draft an evidence report.", parse_mode="Markdown")
+        await query.message.reply_text("Send /report <url> <category_id> to draft an evidence report.", parse_mode="Markdown")
     elif query.data == "menu_sources":
         await sources_command(update, context)
     elif query.data.startswith("export_case_"):
-        await query.message.reply_text("‚úÖ **Abuse Evidence Report Exported Successfully!**\nPackage saved in Markdown, HTML, and JSON format.", parse_mode="Markdown")
+        await query.message.reply_text("? **Abuse Evidence Report Exported Successfully!**\nPackage saved in Markdown, HTML, and JSON format.", parse_mode="Markdown")
     elif query.data == "cancel_case":
-        await query.message.reply_text("‚ùå Case cancelled.", parse_mode="Markdown")
+        await query.message.reply_text("? Case cancelled.", parse_mode="Markdown")

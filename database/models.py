@@ -111,3 +111,21 @@ class AuditLog(Base):
     timestamp = Column(DateTime, default=datetime.utcnow)
 
     case = relationship("AbuseCase", back_populates="audit_logs")
+
+
+class BotUser(Base):
+    __tablename__ = "bot_users"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    telegram_id = Column(String(50), unique=True, nullable=False, index=True)
+    username = Column(String(100), nullable=True)
+    first_name = Column(String(100), nullable=True)
+    last_name = Column(String(100), nullable=True)
+    phone_number = Column(String(50), nullable=True)
+    is_verified = Column(Integer, default=0) # 0 = unverified, 1 = verified
+    query_count = Column(Integer, default=0)
+    report_count = Column(Integer, default=0)
+    first_seen = Column(DateTime, default=datetime.utcnow)
+    last_active = Column(DateTime, default=datetime.utcnow)
+    last_ip = Column(String(50), nullable=True)
+
