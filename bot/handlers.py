@@ -1,65 +1,136 @@
 ﻿import json
+from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup, BotCommand
 from telegram.ext import ContextTypes
 from engine.research_manager import ResearchManager
 from engine.abuse_reporter import AbuseReporter
-from database.user_manager import record_user_activity, get_user_report_stats
+from database.user_manager import (
+    record_user_activity, get_user_by_telegram_id, set_user_language, 
+    get_welcome_config, set_welcome_config, get_user_report_stats, 
+    set_user_report_limit, set_global_report_limit, get_user_stats
+)
 
 research_manager = ResearchManager()
+
+LOCALES = {
+    "en": {
+        "welcome_title": "⚡ *NEXUS OSINT RESEARCH ENGINE*",
+        "tagline": "Premium • Autonomous • Enterprise Intelligence",
+        "greeting_new": "👋 *Welcome to NEXUS OSINT*, {first_name}!",
+        "greeting_returning": "👋 *Welcome back*, {first_name}!",
+        "features": "✨ *CORE CAPABILITIES*\n⚡ *Fast OSINT*: DNS, Username & Phone Metadata\n🛡️ *Abuse Evidence*: Cryptographic SHA-256 Dockets\n🤖 *Gemini 2.5 AI*: Neural Entity Extraction\n🌐 *Cloud Portal*: 24/7 Web Command Center",
+        "profile_title": "👤 *INVESTIGATOR PROFILE*",
+        "dashboard_title": "📊 *SYSTEM TELEMETRY & DASHBOARD*",
+        "ai_title": "🤖 *GEMINI AI ASSISTANT*",
+        "lang_title": "🌐 *SELECT PREFERRED LANGUAGE*",
+        "back": "⬅️ Back",
+        "home": "🏠 Main Menu"
+    },
+    "hi": {
+        "welcome_title": "⚡ *नेक्सस OSINT रिसर्च इंजन*",
+        "tagline": "प्रीमियम • तेज़ • स्वायत्त इंटेलिजेंस",
+        "greeting_new": "👋 *नेक्सस OSINT में आपका स्वागत है*, {first_name}!",
+        "greeting_returning": "👋 *वापसी पर आपका स्वागत है*, {first_name}!",
+        "features": "✨ *मुख्य सुविधाएं*\n⚡ *त्वरित खोज*: डोमेन, यूज़रनेम और फ़ोन डेटा\n🛡️ *रिपोर्टिंग*: SHA-256 सबूत रिपोर्ट प्रणाली\n🤖 *जेमिनी AI*: एआई विश्लेषण और संक्षेप\n🌐 *वेब पोर्टल*: 24/7 लाइव कमांड सेंटर",
+        "profile_title": "👤 *उपयोगकर्ता प्रोफाइल*",
+        "dashboard_title": "📊 *सिस्टम डैशबोर्ड*",
+        "ai_title": "🤖 *जेमिनी AI सहायक*",
+        "lang_title": "🌐 *भाषा चुनें*",
+        "back": "⬅️ वापस",
+        "home": "🏠 मुख्य मेनू"
+    },
+    "mr": {
+        "welcome_title": "⚡ *नेक्सस OSINT रिसर्च इंजिन*",
+        "tagline": "प्रीमियम • वेगवान • अत्याधुनिक बुद्धिमत्ता",
+        "greeting_new": "👋 *नेक्सस OSINT मध्ये आपले स्वागत आहे*, {first_name}!",
+        "greeting_returning": "👋 *पुन्हा स्वागत आहे*, {first_name}!",
+        "features": "✨ *प्रमुख वैशिष्ट्ये*\n⚡ *जलद शोध*: डोमेन, वापरकर्ता नाव आणि फोन माहिती\n🛡️ *अहवाल*: SHA-256 पुरावा अहवाल\n🤖 *जेमिनी AI*: AI विश्लेषण आणि सारांश\n🌐 *वेब पोर्टल*: 24/7 थेट कमांड सेंटर",
+        "profile_title": "👤 *वापरकर्ता प्रोफाइल*",
+        "dashboard_title": "📊 *सिस्टम डॅशबोर्ड*",
+        "ai_title": "🤖 *जेमिनी AI सहाय्यक*",
+        "lang_title": "🌐 *भाषा निवडा*",
+        "back": "⬅️ मागे",
+        "home": "🏠 मुख्य मेनू"
+    }
+}
 
 async def setup_bot_commands(application):
     """Register command suggestions in Telegram UI so typing / shows all available commands."""
     commands = [
-        BotCommand("start", "Start OSINT Bot and verify identity"),
+        BotCommand("start", "Launch Premium Dashboard & Navigation"),
         BotCommand("search", "Quick OSINT lookup (Domain, Username, Phone, Web)"),
         BotCommand("research", "Deep OSINT investigation & AI entity analysis"),
         BotCommand("report", "Collect evidence & draft policy violation report"),
         BotCommand("reports", "View total reports sent and remaining quota limit"),
+        BotCommand("setlimit", "Set report submission limit (100 - 100000)"),
+        BotCommand("profile", "View account status & phone verification"),
+        BotCommand("language", "Switch language (English / हिन्दी / मराठी)"),
         BotCommand("sources", "List active OSINT source adapters"),
         BotCommand("history", "View recent investigation history"),
-        BotCommand("settings", "View system settings & configuration"),
-        BotCommand("help", "Display full help & menu guide")
+        BotCommand("settings", "View system settings & live portal link"),
+        BotCommand("help", "Display full interactive help guide")
     ]
     await application.bot.set_my_commands(commands)
 
 
+def build_main_keyboard(lang: str = "en"):
+    channel_url = "https://t.me/Ruk_research_bot"
+    keyboard = [
+        [InlineKeyboardButton("🛒 Explore Features", callback_data="menu_explore"), InlineKeyboardButton("👤 My Profile", callback_data="menu_profile")],
+        [InlineKeyboardButton("📊 Dashboard", callback_data="menu_dashboard"), InlineKeyboardButton("⚙️ Settings", callback_data="menu_settings")],
+        [InlineKeyboardButton("🤖 AI Assistant", callback_data="menu_ai"), InlineKeyboardButton("📚 Help & Guide", callback_data="menu_help")],
+        [InlineKeyboardButton("📑 Abuse Reports", callback_data="menu_reports"), InlineKeyboardButton("🌐 Language", callback_data="menu_lang")],
+        [InlineKeyboardButton("📢 Official Channel & Updates", url=channel_url)]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    if user:
-        await record_user_activity(
-            telegram_id=str(user.id),
-            username=user.username,
-            first_name=user.first_name,
-            last_name=user.last_name
-        )
+    if not user:
+        return
 
-    name = user.first_name if user else "Investigator"
-    welcome_text = f"🔍 *Telegram OSINT Research Bot Platform*\n\n" \
-                   f"Welcome {name}! Your Public-Source Intelligence Assistant is online.\n\n" \
-                   f"📌 *Command Shortcuts*:\n" \
-                   f"/search <query> - Lookup Domain, Username, Phone, or Web\n" \
-                   f"/research <query> - Deep analysis with AI entity extraction\n" \
-                   f"/report <url> <category_id> <evidence> - Abuse evidence report\n" \
-                   f"/reports - Check your total sent reports and quota limit\n" \
-                   f"/sources - Active public data source adapters\n" \
-                   f"/history - Past research investigations\n" \
-                   f"/settings - System configurations & live portal link\n" \
-                   f"/help - Complete guide\n\n" \
-                   f"📱 *Tap below to link your phone number to your Admin Portal profile.*"
+    db_user, is_new = await record_user_activity(
+        telegram_id=str(user.id),
+        username=user.username,
+        first_name=user.first_name,
+        last_name=user.last_name
+    )
 
-    inline_keyboard = [
-        [InlineKeyboardButton("🔍 Quick Search", callback_data="menu_search"), InlineKeyboardButton("📊 Deep Research", callback_data="menu_research")],
-        [InlineKeyboardButton("📑 Report Violation", callback_data="menu_report"), InlineKeyboardButton("📈 My Reports", callback_data="menu_reports")]
-    ]
-    reply_markup = InlineKeyboardMarkup(inline_keyboard)
+    lang = db_user.language_code if db_user else "en"
+    loc = LOCALES.get(lang, LOCALES["en"])
 
-    reply_keyboard = [
-        [KeyboardButton("📱 Link / Verify Phone Number", request_contact=True)]
-    ]
-    contact_markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True, one_time_keyboard=False)
+    greeting = loc["greeting_new"].format(first_name=user.first_name) if is_new else loc["greeting_returning"].format(first_name=user.first_name)
+    status_badge = "🛡️ Verified Investigator" if (db_user and db_user.is_verified) else "👤 Standard Member"
+    custom_welcome = await get_welcome_config("custom_welcome", "")
 
-    await update.message.reply_text(welcome_text, parse_mode="Markdown", reply_markup=reply_markup)
-    await update.message.reply_text("🔒 Verification Portal:", reply_markup=contact_markup)
+    msg = f"━━━━━━━━━━━━━━━━━━━━\n" \
+          f"{loc['welcome_title']}\n" \
+          f"_{loc['tagline']}_\n" \
+          f"━━━━━━━━━━━━━━━━━━━━\n\n" \
+          f"{greeting}\n\n" \
+          f"🆔 *User*: @{user.username or user.first_name} ({user.id})\n" \
+          f"🎖️ *Status*: {status_badge}\n" \
+          f"🔍 *Queries Run*: {db_user.query_count or 0} | 📑 *Reports*: {db_user.report_count or 0}\n\n" \
+          f"{custom_welcome if custom_welcome else loc['features']}\n\n" \
+          f"━━━━━━━━━━━━━━━━━━━━\n" \
+          f"🔥 *QUICK ACTIONS MENU*"
+
+    reply_markup = build_main_keyboard(lang)
+    contact_keyboard = [[KeyboardButton("📱 Link / Verify Phone Number", request_contact=True)]]
+    contact_markup = ReplyKeyboardMarkup(contact_keyboard, resize_keyboard=True, one_time_keyboard=False)
+
+    # Send banner image if custom banner configured
+    banner_url = await get_welcome_config("welcome_banner", "")
+    if banner_url:
+        try:
+            await update.message.reply_photo(photo=banner_url, caption=msg, parse_mode="Markdown", reply_markup=reply_markup)
+        except Exception:
+            await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=reply_markup)
+    else:
+        await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=reply_markup)
+
+    await update.message.reply_text("🔒 *Identity & Verification:*", reply_markup=contact_markup)
 
 
 async def contact_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -79,7 +150,7 @@ async def contact_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
               f"🏷️ *Username*: @{user.username or 'None'}\n" \
               f"📱 *Phone*: {phone}\n" \
               f"🆔 *Telegram ID*: {user.id}\n\n" \
-              f"Your user record and usage are now live in the Web Admin Portal."
+              f"Your user record is now verified and live in the Web Admin Portal."
         await update.message.reply_text(msg, parse_mode="Markdown")
 
         try:
@@ -94,17 +165,61 @@ async def contact_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
 
 
+async def profile_handler(update_or_query, user_id: str, lang: str = "en"):
+    u = await get_user_by_telegram_id(user_id)
+    if not u:
+        return "User profile not found."
+
+    status_badge = "✅ Phone Verified" if u.is_verified else "⏳ Unverified"
+    joined_date = u.first_seen.strftime("%Y-%m-%d") if u.first_seen else "N/A"
+    last_act = u.last_active.strftime("%Y-%m-%d %H:%M UTC") if u.last_active else "N/A"
+
+    return f"👤 *INVESTIGATOR ACCOUNT PROFILE*\n" \
+           f"━━━━━━━━━━━━━━━━━━━━\n\n" \
+           f"🆔 *Telegram ID*: {u.telegram_id}\n" \
+           f"👤 *Full Name*: {u.first_name or ''} {u.last_name or ''}\n" \
+           f"🏷️ *Username*: @{u.username or 'None'}\n" \
+           f"📱 *Phone Number*: {u.phone_number or 'Not Linked'}\n" \
+           f"🛡️ *Verification Status*: {status_badge}\n" \
+           f"🎖️ *Role / Tier*: {u.user_role or 'MEMBER'}\n" \
+           f"🌐 *Language Preference*: {u.language_code.upper()}\n\n" \
+           f"📊 *ACTIVITY TELEMETRY*\n" \
+           f"• *OSINT Queries Executed*: {u.query_count or 0}\n" \
+           f"• *Abuse Reports Submitted*: {u.report_count or 0}\n" \
+           f"• *Current Report Limit*: {u.max_report_limit or 1000}\n" \
+           f"📅 *Member Since*: {joined_date}\n" \
+           f"⏱️ *Last Active*: {last_act}\n" \
+           f"━━━━━━━━━━━━━━━━━━━━"
+
+
+async def dashboard_handler():
+    stats = await get_user_stats()
+    return f"📊 *SYSTEM TELEMETRY & CLOUD DASHBOARD*\n" \
+           f"━━━━━━━━━━━━━━━━━━━━\n\n" \
+           f"👥 *Total Registered Bot Users*: {stats['total_users']}\n" \
+           f"📱 *Phone Verified Accounts*: {stats['verified_users']}\n" \
+           f"🔍 *Total OSINT Queries Run*: {stats['total_queries']}\n" \
+           f"📑 *Abuse Reports Drafted*: {stats['total_reports']}\n\n" \
+           f"🌐 *Web Command Center*: https://telegram-osint-dashboard.onrender.com\n" \
+           f"⚡ *Engine Health*: ONLINE • Render Cloud\n" \
+           f"🤖 *AI Model*: Gemini 2.5 Flash\n" \
+           f"━━━━━━━━━━━━━━━━━━━━"
+
+
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    help_text = "ℹ️ *OSINT Research Bot Help & Guide*\n\n" \
-                "*Command Reference*:\n" \
-                "/search example.com - DNS, RDAP, HTTP security headers & sitemaps.\n" \
-                "/search @username - Username matches across social platforms.\n" \
-                "/search +14155552671 - E.164 normalization, country/carrier detection.\n" \
-                "/research <query> - Deep research with AI entity extraction.\n" \
-                "/report <url> <category_id> - Deduplicated abuse evidence report.\n" \
-                "/reports - View total sent reports and remaining quota limits.\n\n" \
-                "*Categories for /report*:\n" \
-                "1: Child Safety | 2: Terrorism | 3: Fraud/Scam | 4: Illegal Goods | 5: Non-consensual | 6: DMCA | 7: General"
+    help_text = "ℹ️ *NEXUS OSINT BOT HELP & GUIDE*\n" \
+                "━━━━━━━━━━━━━━━━━━━━\n\n" \
+                "*Core Commands Reference*:\n" \
+                "• /search <query> — Lookup Domain, Username, Phone, or Web\n" \
+                "• /research <query> — Deep OSINT research with AI entity extraction\n" \
+                "• /report <url> <category_id> — Deduplicated abuse evidence report\n" \
+                "• /reports — View total sent reports and remaining quota limit\n" \
+                "• /setlimit <100-100000> — Change report submission limit\n" \
+                "• /profile — Display your account stats & verification\n" \
+                "• /language — Switch language (English / हिन्दी / मराठी)\n" \
+                "• /settings — Portal link & configurations\n\n" \
+                "*Report Category IDs*:\n" \
+                "1: Child Safety | 2: Terrorism | 3: Fraud/Scam | 4: Contraband | 5: Non-consensual | 6: DMCA | 7: General Violation"
     await update.message.reply_text(help_text, parse_mode="Markdown")
 
 
@@ -114,15 +229,42 @@ async def reports_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     stats = await get_user_report_stats(str(user.id))
-    
-    msg = f"📊 *Abuse Evidence Reporting Telemetry*\n\n" \
+    msg = f"📊 *ABUSE EVIDENCE REPORTING TELEMETRY*\n" \
+          f"━━━━━━━━━━━━━━━━━━━━\n\n" \
           f"👤 *Investigator*: @{user.username or user.first_name}\n" \
           f"🆔 *Telegram ID*: {user.id}\n\n" \
           f"📈 *Total Reports Submitted*: {stats['reports_sent']}\n" \
-          f"🛡️ *Configured Safety Limit*: {stats['max_limit']}\n" \
-          f"⏳ *Remaining Quota*: {stats['remaining_quota']}\n\n" \
-          f"⚖️ *Deduplication & Safety*: All evidence packages are hashed with SHA-256 to ensure official compliance. Duplicate submissions of identical evidence are automatically blocked."
+          f"🛡️ *Active Quota Limit*: {stats['max_limit']}\n" \
+          f"⏳ *Remaining Allowance*: {stats['remaining_quota']}\n\n" \
+          f"💡 *Change Quota Limit*: Send /setlimit <number> (e.g. /setlimit 5000) or use the Web Portal."
     await update.message.reply_text(msg, parse_mode="Markdown")
+
+
+async def setlimit_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    if not user:
+        return
+
+    if not context.args:
+        await update.message.reply_text("💡 *Usage*: /setlimit <number>\n\nExample: /setlimit 5000 (Allowed range: 100 to 100,000)", parse_mode="Markdown")
+        return
+
+    try:
+        new_limit = int(context.args[0])
+        if new_limit < 100 or new_limit > 100000:
+            await update.message.reply_text("⚠️ *Invalid Limit*: Please specify a number between 100 and 100,000.", parse_mode="Markdown")
+            return
+
+        await set_user_report_limit(str(user.id), new_limit)
+        await set_global_report_limit(new_limit)
+
+        msg = f"✅ *Report Limit Updated Successfully!*\n\n" \
+              f"🛡️ *New Active Quota Limit*: {new_limit:,} reports\n" \
+              f"👤 *Updated For*: @{user.username or user.first_name} and System Default."
+        await update.message.reply_text(msg, parse_mode="Markdown")
+
+    except ValueError:
+        await update.message.reply_text("⚠️ *Error*: Please provide a valid numeric limit (e.g. /setlimit 5000).", parse_mode="Markdown")
 
 
 async def search_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -195,12 +337,11 @@ async def search_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def report_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user:
-        # Check quota limits
         report_stats = await get_user_report_stats(str(user.id))
         if report_stats["reports_sent"] >= report_stats["max_limit"]:
             await update.message.reply_text(
-                f"⚠️ *Reporting Limit Reached*: You have reached the configured limit of {report_stats['max_limit']} reports.\n"
-                f"Please consult the Admin Portal to request a quota expansion.",
+                f"⚠️ *Reporting Limit Reached*: You have reached your active limit of {report_stats['max_limit']} reports.\n"
+                f"Use /setlimit <number> (e.g. /setlimit 5000) to increase your quota limit.",
                 parse_mode="Markdown"
             )
             return
@@ -218,8 +359,7 @@ async def report_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         msg = f"📑 *Automated Abuse Evidence & Reporting Assistant*\n\n" \
               f"Usage: /report <target_url> <category_id> <evidence_details>\n\n" \
               f"*Categories*:\n{cat_list}\n\n" \
-              f"Example: /report https://t.me/example_channel 3 Fraudulent activity detected\n\n" \
-              f"Use /reports to check your report count and remaining quota."
+              f"Example: /report https://t.me/example_channel 3 Fraudulent activity detected"
         await update.message.reply_text(msg, parse_mode="Markdown")
         return
 
@@ -241,7 +381,7 @@ async def report_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def sources_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     sources_text = "🌐 *Active OSINT Data Source Adapters*:\n\n" \
                    "1. *Domain & DNS Resolver*: DNS (A, MX, TXT, NS), RDAP/WHOIS, HTTP Headers.\n" \
-                   "2. *Username Search Engine*: Multi-platform lookup (GitHub, GitLab, Twitter, Reddit, Medium, Dev.to).\n" \
+                   "2. *Username Search Engine*: Multi-platform lookup (GitHub, Twitter, Reddit, Medium).\n" \
                    "3. *Phone Metadata Engine*: E.164 formatting, country code parsing, line-type.\n" \
                    "4. *Web & News Aggregator*: Search engine scrapers and RSS feed ingestion.\n" \
                    "5. *Document Parser*: PDF, TXT, CSV, JSON regex entity extractor."
@@ -266,21 +406,131 @@ async def settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(settings_text, parse_mode="Markdown")
 
 
+# --- ADMIN CUSTOMIZATION COMMANDS ---
+
+async def editwelcome_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    if not context.args:
+        await update.message.reply_text("💡 *Usage*: /editwelcome <custom_welcome_text>", parse_mode="Markdown")
+        return
+    text = " ".join(context.args)
+    await set_welcome_config("custom_welcome", text)
+    await update.message.reply_text("✅ *Welcome Message Updated Successfully!*", parse_mode="Markdown")
+
+
+async def editbanner_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args:
+        await update.message.reply_text("💡 *Usage*: /editbanner <image_url>", parse_mode="Markdown")
+        return
+    url = context.args[0]
+    await set_welcome_config("welcome_banner", url)
+    await update.message.reply_text("✅ *Welcome Banner Image Updated!*", parse_mode="Markdown")
+
+
+# --- INTERACTIVE BUTTON CALLBACK QUERY HANDLER ---
+
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    user = update.effective_user
     await query.answer()
 
-    if query.data == "menu_search":
-        await query.message.reply_text("Send /search <query> to begin a quick lookup.", parse_mode="Markdown")
-    elif query.data == "menu_research":
-        await query.message.reply_text("Send /research <query> to begin deep OSINT research.", parse_mode="Markdown")
-    elif query.data == "menu_report":
-        await query.message.reply_text("Send /report <url> <category_id> to draft an evidence report.", parse_mode="Markdown")
-    elif query.data == "menu_reports":
-        await reports_command(update, context)
-    elif query.data == "menu_sources":
-        await sources_command(update, context)
-    elif query.data.startswith("export_case_"):
-        await query.message.reply_text("✅ *Abuse Evidence Report Exported Successfully!*\nPackage saved in Markdown, HTML, and JSON format.", parse_mode="Markdown")
-    elif query.data == "cancel_case":
+    data = query.data
+    nav_back_home = [
+        [InlineKeyboardButton("⬅️ Back to Menu", callback_data="menu_home"), InlineKeyboardButton("🏠 Main Menu", callback_data="menu_home")]
+    ]
+    back_markup = InlineKeyboardMarkup(nav_back_home)
+
+    if data == "menu_home":
+        # Re-render main start menu
+        u = await get_user_by_telegram_id(str(user.id))
+        lang = u.language_code if u else "en"
+        loc = LOCALES.get(lang, LOCALES["en"])
+        msg = f"━━━━━━━━━━━━━━━━━━━━\n" \
+              f"{loc['welcome_title']}\n" \
+              f"_{loc['tagline']}_\n" \
+              f"━━━━━━━━━━━━━━━━━━━━\n\n" \
+              f"👋 *Welcome*, {user.first_name}!\n\n" \
+              f"{loc['features']}\n\n" \
+              f"━━━━━━━━━━━━━━━━━━━━\n" \
+              f"🔥 *QUICK ACTIONS MENU*"
+        await query.edit_message_text(msg, parse_mode="Markdown", reply_markup=build_main_keyboard(lang))
+
+    elif data == "menu_explore":
+        txt = "🛒 *NEXUS OSINT CAPABILITIES & ADAPTERS*\n" \
+              "━━━━━━━━━━━━━━━━━━━━\n\n" \
+              "🌐 *1. Domain & DNS Intelligence*\n" \
+              "   • Resolves A, AAAA, MX, NS records, WHOIS/RDAP, HTTP security headers.\n\n" \
+              "👤 *2. Username Footprinting*\n" \
+              "   • Multi-platform lookup (GitHub, Twitter, Reddit, Medium, Dev.to).\n\n" \
+              "📞 *3. Phone Metadata Parser*\n" \
+              "   • E.164 normalization, country code identification, carrier tags.\n\n" \
+              "📰 *4. Web & News Aggregator*\n" \
+              "   • Search engine scraping, news indexing, RSS feed ingestion.\n\n" \
+              "📑 *5. Document Entity Extractor*\n" \
+              "   • PDF, TXT, CSV, JSON regex entity harvester."
+        await query.edit_message_text(txt, parse_mode="Markdown", reply_markup=back_markup)
+
+    elif data == "menu_profile":
+        txt = await profile_handler(query, str(user.id))
+        await query.edit_message_text(txt, parse_mode="Markdown", reply_markup=back_markup)
+
+    elif data == "menu_dashboard":
+        txt = await dashboard_handler()
+        await query.edit_message_text(txt, parse_mode="Markdown", reply_markup=back_markup)
+
+    elif data == "menu_ai":
+        txt = "🤖 *GEMINI 2.5 AI NEURAL RESEARCH ASSISTANT*\n" \
+              "━━━━━━━━━━━━━━━━━━━━\n\n" \
+              "The AI Engine automatically correlates entity relationships, extracts risk indicators, and generates structured executive summaries for every OSINT investigation.\n\n" \
+              "💡 *How to Use*:\n" \
+              "Send /research <target> in chat to trigger deep AI analysis!"
+        await query.edit_message_text(txt, parse_mode="Markdown", reply_markup=back_markup)
+
+    elif data == "menu_help":
+        txt = "📚 *NEXUS OSINT INTERACTIVE HELP*\n" \
+              "━━━━━━━━━━━━━━━━━━━━\n\n" \
+              "• Send /search <query> to begin a quick lookup.\n" \
+              "• Send /research <query> for AI entity correlation.\n" \
+              "• Send /report <url> <category_id> for abuse evidence collection.\n" \
+              "• Send /reports to check your sent reports counter.\n" \
+              "• Send /setlimit <number> to change your report quota limit (100 - 100,000)."
+        await query.edit_message_text(txt, parse_mode="Markdown", reply_markup=back_markup)
+
+    elif data == "menu_reports":
+        stats = await get_user_report_stats(str(user.id))
+        txt = f"📑 *ABUSE EVIDENCE REPORTING TELEMETRY*\n" \
+              f"━━━━━━━━━━━━━━━━━━━━\n\n" \
+              f"📈 *Total Reports Submitted*: {stats['reports_sent']}\n" \
+              f"🛡️ *Active Quota Limit*: {stats['max_limit']}\n" \
+              f"⏳ *Remaining Allowance*: {stats['remaining_quota']}\n\n" \
+              f"💡 Send /setlimit <number> to change your report submission limit."
+        await query.edit_message_text(txt, parse_mode="Markdown", reply_markup=back_markup)
+
+    elif data == "menu_settings":
+        txt = "⚙️ *SYSTEM CONFIGURATIONS*\n" \
+              "━━━━━━━━━━━━━━━━━━━━\n\n" \
+              "• *Engine*: FastAPI / Uvicorn + Async SQLAlchemy\n" \
+              "• *AI Core*: Gemini 2.5 Flash API\n" \
+              "• *Web Portal*: https://telegram-osint-dashboard.onrender.com\n" \
+              "• *Telemetry*: Active"
+        await query.edit_message_text(txt, parse_mode="Markdown", reply_markup=back_markup)
+
+    elif data == "menu_lang":
+        lang_kb = [
+            [InlineKeyboardButton("🇬🇧 English", callback_data="lang_en"), InlineKeyboardButton("🇮🇳 हिन्दी", callback_data="lang_hi")],
+            [InlineKeyboardButton("🚩 मराठी", callback_data="lang_mr")],
+            [InlineKeyboardButton("⬅️ Back to Menu", callback_data="menu_home")]
+        ]
+        await query.edit_message_text("🌐 *SELECT YOUR PREFERRED LANGUAGE / भाषा चुनें / भाषा निवडा:*", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(lang_kb))
+
+    elif data.startswith("lang_"):
+        code = data.split("_")[1]
+        await set_user_language(str(user.id), code)
+        loc = LOCALES.get(code, LOCALES["en"])
+        await query.edit_message_text(f"✅ *Language updated to {code.upper()}!*\n\n{loc['welcome_title']}", parse_mode="Markdown", reply_markup=back_markup)
+
+    elif data.startswith("export_case_"):
+        await query.message.reply_text("✅ *Abuse Evidence Report Package Exported Successfully!*", parse_mode="Markdown")
+
+    elif data == "cancel_case":
         await query.message.reply_text("❌ Case cancelled.", parse_mode="Markdown")

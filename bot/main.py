@@ -1,4 +1,4 @@
-import sys
+﻿import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -8,9 +8,9 @@ from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandle
 from config import settings
 from database.session import init_db
 from bot.handlers import (
-    start_command, help_command, search_command, report_command, 
-    sources_command, history_command, settings_command, button_handler, 
-    contact_handler, setup_bot_commands
+    start_command, help_command, search_command, report_command, reports_command, setlimit_command,
+    editwelcome_command, editbanner_command, sources_command, history_command, settings_command, 
+    button_handler, contact_handler, setup_bot_commands
 )
 
 logging.basicConfig(
@@ -32,13 +32,17 @@ def main():
     app.add_handler(CommandHandler("search", search_command))
     app.add_handler(CommandHandler("research", search_command))
     app.add_handler(CommandHandler("report", report_command))
+    app.add_handler(CommandHandler("reports", reports_command))
+    app.add_handler(CommandHandler("setlimit", setlimit_command))
+    app.add_handler(CommandHandler("editwelcome", editwelcome_command))
+    app.add_handler(CommandHandler("editbanner", editbanner_command))
     app.add_handler(CommandHandler("sources", sources_command))
     app.add_handler(CommandHandler("history", history_command))
     app.add_handler(CommandHandler("settings", settings_command))
     app.add_handler(MessageHandler(filters.CONTACT, contact_handler))
     app.add_handler(CallbackQueryHandler(button_handler))
 
-    print("OSINT Research Bot is running with Contact & User Telemetry...")
+    print("OSINT Research Bot is running with Premium /start & Telemetry...")
     app.run_polling()
 
 if __name__ == "__main__":

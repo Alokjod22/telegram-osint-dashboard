@@ -1,15 +1,17 @@
 ﻿from datetime import datetime
-from sqlalchemy import select, desc
+from sqlalchemy import select, desc, update
 from database.session import AsyncSessionLocal
-from database.models import BotUser
+from database.models import BotUser, WelcomeConfig
 
-MAX_REPORT_LIMIT_PER_USER = 1000  # Configurable quota limit between 100 and 100,000
+GLOBAL_DEFAULT_LIMIT = 1000
 
 async def record_user_activity(telegram_id: str, username: str = None, first_name: str = None, last_name: str = None, phone_number: str = None, is_query: bool = False, is_report: bool = False, ip: str = None):
     async with AsyncSessionLocal() as session:
         result = await session.execute(select(BotUser).where(BotUser.telegram_id == str(telegram_id)))
         user = result.scalars().first()
+        is_new = False
         if not user:
+            is_new = True
             user = BotUser(
                 telegram_id=str(telegram_id),
                 username=username,
@@ -19,6 +21,9 @@ async def record_user_activity(telegram_id: str, username: str = None, first_nam
                 is_verified=1 if phone_number else 0,
                 query_count=1 if is_query else 0,
                 report_count=1 if is_report else 0,
+                max_report_limit=GLOBAL_DEFAULT_LIMIT,
+                language_code="en",
+                user_role="MEMBER",
                 first_seen=datetime.utcnow(),
                 last_active=datetime.utcnow(),
                 last_ip=ip
@@ -43,7 +48,40 @@ async def record_user_activity(telegram_id: str, username: str = None, first_nam
             user.last_active = datetime.utcnow()
         await session.commit()
         await session.refresh(user)
-        return user
+        return user, is_new
+
+async def get_user_by_telegram_id(telegram_id: str):
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(select(BotUser).where(BotUser.telegram_id == str(telegram_id)))
+        return result.scalars().first()
+
+async def set_user_language(telegram_id: str, lang_code: str):
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(select(BotUser).where(BotUser.telegram_id == str(telegram_id)))
+        user = result.scalars().first()
+        if user:
+            user.language_code = lang_code
+            await session.commit()
+            return True
+        return False
+
+async def get_welcome_config(key: str, default: str = ""):
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(select(WelcomeConfig).where(WelcomeConfig.key == key))
+        cfg = result.scalars().first()
+        return cfg.value if cfg and cfg.value else default
+
+async def set_welcome_config(key: str, value: str):
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(select(WelcomeConfig).where(WelcomeConfig.key == key))
+        cfg = result.scalars().first()
+        if not cfg:
+            cfg = WelcomeConfig(key=key, value=value)
+            session.add(cfg)
+        else:
+            cfg.value = value
+        await session.commit()
+        return True
 
 async def get_all_users(limit: int = 100):
     async with AsyncSessionLocal() as session:
@@ -70,9 +108,28 @@ async def get_user_report_stats(telegram_id: str):
         result = await session.execute(select(BotUser).where(BotUser.telegram_id == str(telegram_id)))
         user = result.scalars().first()
         count = user.report_count if user else 0
+        limit = user.max_report_limit if (user and user.max_report_limit) else GLOBAL_DEFAULT_LIMIT
         return {
             "telegram_id": telegram_id,
             "reports_sent": count,
-            "max_limit": MAX_REPORT_LIMIT_PER_USER,
-            "remaining_quota": max(0, MAX_REPORT_LIMIT_PER_USER - count)
+            "max_limit": limit,
+            "remaining_quota": max(0, limit - count)
         }
+
+async def set_user_report_limit(telegram_id: str, new_limit: int):
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(select(BotUser).where(BotUser.telegram_id == str(telegram_id)))
+        user = result.scalars().first()
+        if user:
+            user.max_report_limit = new_limit
+            await session.commit()
+            return True
+        return False
+
+async def set_global_report_limit(new_limit: int):
+    global GLOBAL_DEFAULT_LIMIT
+    GLOBAL_DEFAULT_LIMIT = new_limit
+    async with AsyncSessionLocal() as session:
+        await session.execute(update(BotUser).values(max_report_limit=new_limit))
+        await session.commit()
+    return True

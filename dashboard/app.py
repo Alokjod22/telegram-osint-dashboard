@@ -14,12 +14,12 @@ from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandle
 from config import settings
 from database.session import AsyncSessionLocal, init_db
 from database.models import BotUser, Investigation, SearchRecord, AbuseCase, AbuseEvidence
-from database.user_manager import get_all_users, get_user_stats, record_user_activity
+from database.user_manager import get_all_users, get_user_stats, record_user_activity, set_user_report_limit
 from engine.research_manager import ResearchManager
 from bot.handlers import (
-    start_command, help_command, search_command, report_command, reports_command,
-    sources_command, history_command, settings_command, button_handler, 
-    contact_handler, setup_bot_commands
+    start_command, help_command, search_command, report_command, reports_command, setlimit_command,
+    editwelcome_command, editbanner_command, sources_command, history_command, settings_command, 
+    button_handler, contact_handler, setup_bot_commands
 )
 
 app = FastAPI(title="OSINT Bot Enterprise Admin Portal")
@@ -56,6 +56,9 @@ async def startup_event():
             bot_app.add_handler(CommandHandler("research", search_command))
             bot_app.add_handler(CommandHandler("report", report_command))
             bot_app.add_handler(CommandHandler("reports", reports_command))
+            bot_app.add_handler(CommandHandler("setlimit", setlimit_command))
+            bot_app.add_handler(CommandHandler("editwelcome", editwelcome_command))
+            bot_app.add_handler(CommandHandler("editbanner", editbanner_command))
             bot_app.add_handler(CommandHandler("sources", sources_command))
             bot_app.add_handler(CommandHandler("history", history_command))
             bot_app.add_handler(CommandHandler("settings", settings_command))
@@ -117,11 +120,23 @@ async def api_users(limit: int = 50):
             "is_verified": bool(u.is_verified),
             "query_count": u.query_count or 0,
             "report_count": u.report_count or 0,
+            "max_report_limit": u.max_report_limit or 1000,
             "first_seen": u.first_seen.strftime("%Y-%m-%d %H:%M") if u.first_seen else "N/A",
             "last_active": u.last_active.strftime("%Y-%m-%d %H:%M:%S") if u.last_active else "N/A"
         }
         for u in users
     ]
+
+class SetLimitRequest(BaseModel):
+    telegram_id: str
+    new_limit: int
+
+@app.post("/api/users/set-limit")
+async def api_set_limit(payload: SetLimitRequest):
+    if payload.new_limit < 100 or payload.new_limit > 100000:
+        return JSONResponse({"error": "Limit must be between 100 and 100,000"}, status_code=400)
+    success = await set_user_report_limit(payload.telegram_id, payload.new_limit)
+    return {"success": success, "telegram_id": payload.telegram_id, "new_limit": payload.new_limit}
 
 @app.get("/api/investigations")
 async def api_investigations(limit: int = 20):
