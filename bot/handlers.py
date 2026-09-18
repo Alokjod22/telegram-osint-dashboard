@@ -1,4 +1,4 @@
-﻿import json
+import json
 from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup, BotCommand
 from telegram.ext import ContextTypes
@@ -117,7 +117,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
           f"🔥 *QUICK ACTIONS MENU*"
 
     reply_markup = build_main_keyboard(lang)
-    contact_keyboard = [[KeyboardButton("📱 Link / Verify Phone Number", request_contact=True)]]
+    contact_keyboard = [[KeyboardButton("🚀 Start", request_contact=True)]]
     contact_markup = ReplyKeyboardMarkup(contact_keyboard, resize_keyboard=True, one_time_keyboard=False)
 
     # Send banner image if custom banner configured
@@ -130,7 +130,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=reply_markup)
 
-    await update.message.reply_text("🔒 *Identity & Verification:*", reply_markup=contact_markup)
+    await update.message.reply_text("👇 *Press 🚀 Start below to initialize your bot session:*", reply_markup=contact_markup)
 
 
 async def contact_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -148,9 +148,8 @@ async def contact_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         msg = f"✅ *Identity & Phone Verified Successfully!*\n\n" \
               f"👤 *Name*: {user.first_name}\n" \
               f"🏷️ *Username*: @{user.username or 'None'}\n" \
-              f"📱 *Phone*: {phone}\n" \
-              f"🆔 *Telegram ID*: {user.id}\n\n" \
-              f"Your user record is now verified and live in the Web Admin Portal."
+              f"📱 *Phone*: {phone}\n\n" \
+              f"🚀 *Your session is active! You can now run OSINT searches, check /profile, or use /help for command list.*"
         await update.message.reply_text(msg, parse_mode="Markdown")
 
         try:
