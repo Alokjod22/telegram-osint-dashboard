@@ -1,7 +1,8 @@
-import os
+﻿import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import asyncio
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -9,10 +10,17 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from sqlalchemy import select, desc
 
+from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, MessageHandler, filters
+from config import settings
 from database.session import AsyncSessionLocal, init_db
 from database.models import BotUser, Investigation, SearchRecord, AbuseCase, AbuseEvidence
-from database.user_manager import get_all_users, get_user_stats
+from database.user_manager import get_all_users, get_user_stats, record_user_activity
 from engine.research_manager import ResearchManager
+from bot.handlers import (
+    start_command, help_command, search_command, report_command, 
+    sources_command, history_command, settings_command, button_handler, 
+    contact_handler, setup_bot_commands
+)
 
 app = FastAPI(title="OSINT Bot Enterprise Admin Portal")
 research_manager = ResearchManager()
@@ -20,9 +28,56 @@ research_manager = ResearchManager()
 templates_dir = os.path.join(os.path.dirname(__file__), "templates")
 templates = Jinja2Templates(directory=templates_dir)
 
+bot_app = None
+
 @app.on_event("startup")
 async def startup_event():
+    global bot_app
     await init_db()
+
+    # Pre-seed user record for RUKMOD1
+    try:
+        await record_user_activity(
+            telegram_id="6615454339",
+            username="RUKMOD1",
+            first_name="RUK",
+            is_query=True
+        )
+    except Exception as e:
+        print("Initial seeding error:", e)
+
+    # Launch Telegram Bot Polling Daemon directly inside Cloud Server
+    if settings.TELEGRAM_BOT_TOKEN and settings.TELEGRAM_BOT_TOKEN != "YOUR_TELEGRAM_BOT_TOKEN":
+        try:
+            bot_app = ApplicationBuilder().token(settings.TELEGRAM_BOT_TOKEN).post_init(setup_bot_commands).build()
+            bot_app.add_handler(CommandHandler("start", start_command))
+            bot_app.add_handler(CommandHandler("help", help_command))
+            bot_app.add_handler(CommandHandler("search", search_command))
+            bot_app.add_handler(CommandHandler("research", search_command))
+            bot_app.add_handler(CommandHandler("report", report_command))
+            bot_app.add_handler(CommandHandler("sources", sources_command))
+            bot_app.add_handler(CommandHandler("history", history_command))
+            bot_app.add_handler(CommandHandler("settings", settings_command))
+            bot_app.add_handler(MessageHandler(filters.CONTACT, contact_handler))
+            bot_app.add_handler(CallbackQueryHandler(button_handler))
+
+            await bot_app.initialize()
+            await bot_app.start()
+            await bot_app.updater.start_polling(drop_pending_updates=False)
+            print("Telegram Bot daemon successfully running in Cloud Server!")
+        except Exception as e:
+            print("Failed to start cloud bot daemon:", e)
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    global bot_app
+    if bot_app:
+        try:
+            await bot_app.updater.stop()
+            await bot_app.stop()
+            await bot_app.shutdown()
+        except Exception:
+            pass
 
 @app.get("/", response_class=HTMLResponse)
 async def dashboard_home(request: Request):
@@ -39,7 +94,8 @@ async def health_check():
     return {
         "status": "HEALTHY", 
         "service": "Telegram OSINT Research Engine & Telemetry Hub",
-        "version": "2.4.0"
+        "bot_running": bot_app is not None,
+        "version": "2.5.0"
     }
 
 @app.get("/api/stats")
@@ -95,7 +151,6 @@ async def api_run_search(payload: SearchRequest):
 
 @app.get("/api/network-graph")
 async def api_network_graph():
-    # Return structured nodes & edges for graph visualization
     nodes = [
         {"id": "hub", "label": "OSINT Engine Hub", "group": "server", "shape": "dot", "size": 25},
         {"id": "tg_bot", "label": "Telegram Bot", "group": "bot", "shape": "diamond", "size": 20}
