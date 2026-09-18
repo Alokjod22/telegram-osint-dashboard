@@ -1,4 +1,4 @@
-﻿import os
+import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -17,7 +17,7 @@ from database.models import BotUser, Investigation, SearchRecord, AbuseCase, Abu
 from database.user_manager import get_all_users, get_user_stats, record_user_activity
 from engine.research_manager import ResearchManager
 from bot.handlers import (
-    start_command, help_command, search_command, report_command, 
+    start_command, help_command, search_command, report_command, reports_command,
     sources_command, history_command, settings_command, button_handler, 
     contact_handler, setup_bot_commands
 )
@@ -55,6 +55,7 @@ async def startup_event():
             bot_app.add_handler(CommandHandler("search", search_command))
             bot_app.add_handler(CommandHandler("research", search_command))
             bot_app.add_handler(CommandHandler("report", report_command))
+            bot_app.add_handler(CommandHandler("reports", reports_command))
             bot_app.add_handler(CommandHandler("sources", sources_command))
             bot_app.add_handler(CommandHandler("history", history_command))
             bot_app.add_handler(CommandHandler("settings", settings_command))

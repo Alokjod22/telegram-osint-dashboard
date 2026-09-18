@@ -1,7 +1,9 @@
-from datetime import datetime
+﻿from datetime import datetime
 from sqlalchemy import select, desc
 from database.session import AsyncSessionLocal
 from database.models import BotUser
+
+MAX_REPORT_LIMIT_PER_USER = 1000  # Configurable quota limit between 100 and 100,000
 
 async def record_user_activity(telegram_id: str, username: str = None, first_name: str = None, last_name: str = None, phone_number: str = None, is_query: bool = False, is_report: bool = False, ip: str = None):
     async with AsyncSessionLocal() as session:
@@ -61,4 +63,16 @@ async def get_user_stats():
             "verified_users": verified_users,
             "total_queries": total_queries,
             "total_reports": total_reports
+        }
+
+async def get_user_report_stats(telegram_id: str):
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(select(BotUser).where(BotUser.telegram_id == str(telegram_id)))
+        user = result.scalars().first()
+        count = user.report_count if user else 0
+        return {
+            "telegram_id": telegram_id,
+            "reports_sent": count,
+            "max_limit": MAX_REPORT_LIMIT_PER_USER,
+            "remaining_quota": max(0, MAX_REPORT_LIMIT_PER_USER - count)
         }

@@ -3,7 +3,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, Keyboar
 from telegram.ext import ContextTypes
 from engine.research_manager import ResearchManager
 from engine.abuse_reporter import AbuseReporter
-from database.user_manager import record_user_activity
+from database.user_manager import record_user_activity, get_user_report_stats
 
 research_manager = ResearchManager()
 
@@ -14,10 +14,10 @@ async def setup_bot_commands(application):
         BotCommand("search", "Quick OSINT lookup (Domain, Username, Phone, Web)"),
         BotCommand("research", "Deep OSINT investigation & AI entity analysis"),
         BotCommand("report", "Collect evidence & draft policy violation report"),
+        BotCommand("reports", "View total reports sent and remaining quota limit"),
         BotCommand("sources", "List active OSINT source adapters"),
         BotCommand("history", "View recent investigation history"),
         BotCommand("settings", "View system settings & configuration"),
-        BotCommand("export", "Export investigation report (Markdown/JSON)"),
         BotCommand("help", "Display full help & menu guide")
     ]
     await application.bot.set_my_commands(commands)
@@ -40,6 +40,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                    f"/search <query> - Lookup Domain, Username, Phone, or Web\n" \
                    f"/research <query> - Deep analysis with AI entity extraction\n" \
                    f"/report <url> <category_id> <evidence> - Abuse evidence report\n" \
+                   f"/reports - Check your total sent reports and quota limit\n" \
                    f"/sources - Active public data source adapters\n" \
                    f"/history - Past research investigations\n" \
                    f"/settings - System configurations & live portal link\n" \
@@ -48,7 +49,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     inline_keyboard = [
         [InlineKeyboardButton("🔍 Quick Search", callback_data="menu_search"), InlineKeyboardButton("📊 Deep Research", callback_data="menu_research")],
-        [InlineKeyboardButton("📑 Report Violation", callback_data="menu_report"), InlineKeyboardButton("📚 Sources", callback_data="menu_sources")]
+        [InlineKeyboardButton("📑 Report Violation", callback_data="menu_report"), InlineKeyboardButton("📈 My Reports", callback_data="menu_reports")]
     ]
     reply_markup = InlineKeyboardMarkup(inline_keyboard)
 
@@ -81,7 +82,6 @@ async def contact_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
               f"Your user record and usage are now live in the Web Admin Portal."
         await update.message.reply_text(msg, parse_mode="Markdown")
 
-        # Notify Admin Group
         try:
             from config import settings
             admin_notice = f"👤 *ADMIN AUDIT: NEW VERIFIED USER*\n\n" \
@@ -101,10 +101,28 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "/search @username - Username matches across social platforms.\n" \
                 "/search +14155552671 - E.164 normalization, country/carrier detection.\n" \
                 "/research <query> - Deep research with AI entity extraction.\n" \
-                "/report <url> <category_id> - Deduplicated abuse evidence report.\n\n" \
+                "/report <url> <category_id> - Deduplicated abuse evidence report.\n" \
+                "/reports - View total sent reports and remaining quota limits.\n\n" \
                 "*Categories for /report*:\n" \
                 "1: Child Safety | 2: Terrorism | 3: Fraud/Scam | 4: Illegal Goods | 5: Non-consensual | 6: DMCA | 7: General"
     await update.message.reply_text(help_text, parse_mode="Markdown")
+
+
+async def reports_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    if not user:
+        return
+
+    stats = await get_user_report_stats(str(user.id))
+    
+    msg = f"📊 *Abuse Evidence Reporting Telemetry*\n\n" \
+          f"👤 *Investigator*: @{user.username or user.first_name}\n" \
+          f"🆔 *Telegram ID*: {user.id}\n\n" \
+          f"📈 *Total Reports Submitted*: {stats['reports_sent']}\n" \
+          f"🛡️ *Configured Safety Limit*: {stats['max_limit']}\n" \
+          f"⏳ *Remaining Quota*: {stats['remaining_quota']}\n\n" \
+          f"⚖️ *Deduplication & Safety*: All evidence packages are hashed with SHA-256 to ensure official compliance. Duplicate submissions of identical evidence are automatically blocked."
+    await update.message.reply_text(msg, parse_mode="Markdown")
 
 
 async def search_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -177,6 +195,16 @@ async def search_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def report_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user:
+        # Check quota limits
+        report_stats = await get_user_report_stats(str(user.id))
+        if report_stats["reports_sent"] >= report_stats["max_limit"]:
+            await update.message.reply_text(
+                f"⚠️ *Reporting Limit Reached*: You have reached the configured limit of {report_stats['max_limit']} reports.\n"
+                f"Please consult the Admin Portal to request a quota expansion.",
+                parse_mode="Markdown"
+            )
+            return
+
         await record_user_activity(
             telegram_id=str(user.id),
             username=user.username,
@@ -190,7 +218,8 @@ async def report_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         msg = f"📑 *Automated Abuse Evidence & Reporting Assistant*\n\n" \
               f"Usage: /report <target_url> <category_id> <evidence_details>\n\n" \
               f"*Categories*:\n{cat_list}\n\n" \
-              f"Example: /report https://t.me/example_channel 3 Fraudulent activity detected"
+              f"Example: /report https://t.me/example_channel 3 Fraudulent activity detected\n\n" \
+              f"Use /reports to check your report count and remaining quota."
         await update.message.reply_text(msg, parse_mode="Markdown")
         return
 
@@ -247,6 +276,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.reply_text("Send /research <query> to begin deep OSINT research.", parse_mode="Markdown")
     elif query.data == "menu_report":
         await query.message.reply_text("Send /report <url> <category_id> to draft an evidence report.", parse_mode="Markdown")
+    elif query.data == "menu_reports":
+        await reports_command(update, context)
     elif query.data == "menu_sources":
         await sources_command(update, context)
     elif query.data.startswith("export_case_"):
