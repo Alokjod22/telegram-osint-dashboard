@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  osint-bot:
+    build: .
+    container_name: telegram_osint_bot
+    restart: always
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - DATABASE_URL=postgresql+asyncpg://osint_user:osint_pass@db:5432/osint_db
+    depends_on:
+      - db
+
+  osint-dashboard:
+    build: .
+    container_name: telegram_osint_dashboard
+    restart: always
+    command: uvicorn dashboard.app:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://osint_user:osint_pass@db:5432/osint_db
+    depends_on:
+      - db
+
+  db:
+    image: postgres:15-alpine
+    container_name: osint_db
+    restart: always
+    environment:
+      - POSTGRES_USER=osint_user
+      - POSTGRES_PASSWORD=osint_pass
+      - POSTGRES_DB=osint_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:

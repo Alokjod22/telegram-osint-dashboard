@@ -1,0 +1,6 @@
+.env
+deploy_render.py
+osint_bot.db
+*.pyc
+__pycache__/
+.pytest_cache/
