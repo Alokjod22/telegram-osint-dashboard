@@ -58,6 +58,7 @@ async def setup_bot_commands(application):
     """Register command suggestions in Telegram UI so typing / shows all available commands."""
     commands = [
         BotCommand("start", "Launch Premium Dashboard & Navigation"),
+        BotCommand("numinfo", "📞 Phone Number to Info OSINT Lookup"),
         BotCommand("search", "Quick OSINT lookup (Domain, Username, Phone, Web)"),
         BotCommand("research", "Deep OSINT investigation & AI entity analysis"),
         BotCommand("report", "Collect evidence & draft policy violation report"),
@@ -76,11 +77,11 @@ async def setup_bot_commands(application):
 def build_main_keyboard(lang: str = "en"):
     channel_url = "https://t.me/Ruk_research_bot"
     keyboard = [
-        [InlineKeyboardButton("🛒 Explore Features", callback_data="menu_explore"), InlineKeyboardButton("👤 My Profile", callback_data="menu_profile")],
-        [InlineKeyboardButton("📊 Dashboard", callback_data="menu_dashboard"), InlineKeyboardButton("⚙️ Settings", callback_data="menu_settings")],
-        [InlineKeyboardButton("🤖 AI Assistant", callback_data="menu_ai"), InlineKeyboardButton("📚 Help & Guide", callback_data="menu_help")],
-        [InlineKeyboardButton("📑 Abuse Reports", callback_data="menu_reports"), InlineKeyboardButton("🌐 Language", callback_data="menu_lang")],
-        [InlineKeyboardButton("📢 Official Channel & Updates", url=channel_url)]
+        [InlineKeyboardButton("📞 Phone to Info", callback_data="menu_numinfo"), InlineKeyboardButton("🛒 Explore Features", callback_data="menu_explore")],
+        [InlineKeyboardButton("👤 My Profile", callback_data="menu_profile"), InlineKeyboardButton("📊 Dashboard", callback_data="menu_dashboard")],
+        [InlineKeyboardButton("🤖 AI Assistant", callback_data="menu_ai"), InlineKeyboardButton("⚙️ Settings", callback_data="menu_settings")],
+        [InlineKeyboardButton("📑 Abuse Reports", callback_data="menu_reports"), InlineKeyboardButton("📚 Help & Guide", callback_data="menu_help")],
+        [InlineKeyboardButton("🌐 Language / भाषा", callback_data="menu_lang"), InlineKeyboardButton("📢 Official Channel", url=channel_url)]
     ]
     return InlineKeyboardMarkup(keyboard)
 
@@ -308,10 +309,18 @@ async def search_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             output_text += f"• [{p['platform']}]({p['profile_url']}) (Confidence: {p['confidence']*100:.0f}%)\n"
 
     elif search_type == "PHONE":
-        output_text += f"📞 *Phone Metadata*:\n" \
-                       f"• E.164: {data.get('normalized_e164')}\n" \
-                       f"• Country: {data.get('country')} ({data.get('country_code')})\n" \
-                       f"• Line Type: {data.get('line_type')}\n"
+        output_text += f"📞 *PHONE OSINT DOSSIER & METADATA*:\n" \
+                       f"• *Normalized E.164*: `{data.get('normalized_e164')}`\n" \
+                       f"• *Country*: {data.get('country')} ({data.get('country_code')})\n" \
+                       f"• *Region*: {data.get('region', 'Global')}\n" \
+                       f"• *Estimated Carrier*: {data.get('carrier_hint', 'Telecom Provider')}\n" \
+                       f"• *Line Classification*: {data.get('line_type')}\n" \
+                       f"• *Risk Rating*: `{data.get('risk_score', 'LOW')}` ({', '.join(data.get('risk_factors', ['Clean format']))})\n\n" \
+                       f"🔗 *DIRECT LOOKUP & FOOTPRINT LINKS*:\n" \
+                       f"• [💬 WhatsApp Direct Chat]({data.get('whatsapp_url', '#')})\n" \
+                       f"• [✈️ Telegram Contact Link]({data.get('telegram_url', '#')})\n" \
+                       f"• [🔍 Truecaller Search]({data.get('truecaller_url', '#')})\n" \
+                       f"• [🌐 Google OSINT Footprint]({data.get('google_dork_url', '#')})\n"
 
     else:
         web_res = data.get("web_results", [])
@@ -328,6 +337,69 @@ async def search_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         from config import settings
         user_info = f"@{user.username}" if user and user.username else f"User {user.id if user else 'Unknown'}"
         admin_log = f"🔔 *ADMIN AUDIT LOG — NEW SEARCH*\n\n• *User*: {user_info}\n• *Query*: {query}\n• *Type*: {search_type}\n• *Investigation ID*: {inv_id}"
+        await context.bot.send_message(chat_id=settings.ADMIN_CHAT_ID, text=admin_log, parse_mode="Markdown")
+    except Exception:
+        pass
+
+
+async def numinfo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    if user:
+        await record_user_activity(
+            telegram_id=str(user.id),
+            username=user.username,
+            first_name=user.first_name,
+            last_name=user.last_name,
+            is_query=True
+        )
+
+    if not context.args:
+        await update.message.reply_text(
+            "📞 *PHONE NUMBER TO INFO OSINT TOOL*\n"
+            "━━━━━━━━━━━━━━━━━━━━\n\n"
+            "💡 *Usage*: `/numinfo <phone_number>` or `/phone <phone_number>`\n\n"
+            "Examples:\n"
+            "• `/numinfo +919876543210` (India 🇮🇳)\n"
+            "• `/numinfo +14155552671` (US 🇺🇸)\n"
+            "• `/numinfo +447911123456` (UK 🇬🇧)\n\n"
+            "Extracts country, region, telecom carrier, line type, WhatsApp & Telegram links, Truecaller footprint & AI risk rating!",
+            parse_mode="Markdown"
+        )
+        return
+
+    phone_query = " ".join(context.args).strip()
+    msg = await update.message.reply_text(f"📞 *Executing Phone OSINT Lookup* for `{phone_query}`...\nPlease wait while telecom & OSINT adapters run.", parse_mode="Markdown")
+
+    res = await research_manager.execute_investigation(phone_query, search_type="PHONE")
+    inv_id = res["investigation_id"]
+    data = res["data"]
+
+    output_text = f"📞 *PHONE NUMBER TO INFO DOSSIER*\n" \
+                  f"━━━━━━━━━━━━━━━━━━━━\n\n" \
+                  f"🆔 *Investigation ID*: `{inv_id}`\n" \
+                  f"📲 *Input Target*: `{data.get('input_phone', phone_query)}`\n" \
+                  f"🌐 *Normalized E.164*: `{data.get('normalized_e164', phone_query)}`\n" \
+                  f"🌍 *Country*: {data.get('country', 'Unknown')} ({data.get('country_code', 'INTL')})\n" \
+                  f"📍 *Region*: {data.get('region', 'Global')}\n" \
+                  f"📡 *Estimated Carrier*: {data.get('carrier_hint', 'Telecom Provider')}\n" \
+                  f"🏷️ *Line Type*: {data.get('line_type', 'Mobile Line')}\n" \
+                  f"🛡️ *Risk Score*: `{data.get('risk_score', 'LOW')}`\n" \
+                  f"⚠️ *Risk Indicators*: {', '.join(data.get('risk_factors', ['None']))}\n\n" \
+                  f"🔗 *DIRECT LOOKUP & FOOTPRINT LINKS*:\n" \
+                  f"• [💬 WhatsApp Direct Chat]({data.get('whatsapp_url', '#')})\n" \
+                  f"• [✈️ Telegram Contact Link]({data.get('telegram_url', '#')})\n" \
+                  f"• [🔍 Truecaller Search]({data.get('truecaller_url', '#')})\n" \
+                  f"• [🌐 Google OSINT Footprint]({data.get('google_dork_url', '#')})\n"
+
+    if "ai_analysis" in res and "ai_analysis" in res["ai_analysis"]:
+        output_text += f"\n🤖 *AI Risk & Intelligence Brief*:\n{res['ai_analysis']['ai_analysis'][:500]}\n"
+
+    await msg.edit_text(output_text, parse_mode="Markdown", disable_web_page_preview=True)
+
+    try:
+        from config import settings
+        user_info = f"@{user.username}" if user and user.username else f"User {user.id if user else 'Unknown'}"
+        admin_log = f"🔔 *ADMIN AUDIT LOG — PHONE OSINT LOOKUP*\n\n• *User*: {user_info}\n• *Target*: {phone_query}\n• *Investigation ID*: {inv_id}"
         await context.bot.send_message(chat_id=settings.ADMIN_CHAT_ID, text=admin_log, parse_mode="Markdown")
     except Exception:
         pass
@@ -467,6 +539,23 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
               "   • Search engine scraping, news indexing, RSS feed ingestion.\n\n" \
               "📑 *5. Document Entity Extractor*\n" \
               "   • PDF, TXT, CSV, JSON regex entity harvester."
+        await query.edit_message_text(txt, parse_mode="Markdown", reply_markup=back_markup)
+
+    elif data == "menu_numinfo":
+        txt = "📞 *PHONE NUMBER TO INFO OSINT TOOL*\n" \
+              "━━━━━━━━━━━━━━━━━━━━\n\n" \
+              "This specialized OSINT module analyzes any phone number globally.\n\n" \
+              "✨ *Features & Output*:\n" \
+              "• E.164 Standard Normalization\n" \
+              "• Country Code & Regional Location\n" \
+              "• Estimated Telecom Carrier Provider\n" \
+              "• Line Type (Mobile, Fixed, Toll-Free)\n" \
+              "• Direct WhatsApp Chat & Telegram Links\n" \
+              "• Truecaller Search & Google OSINT Footprints\n" \
+              "• Neural AI Risk Score Assessment\n\n" \
+              "💡 *How to Use*:\n" \
+              "Send `/numinfo <phone_number>` or `/phone <phone_number>` in chat!\n\n" \
+              "Example: `/numinfo +919876543210`"
         await query.edit_message_text(txt, parse_mode="Markdown", reply_markup=back_markup)
 
     elif data == "menu_profile":

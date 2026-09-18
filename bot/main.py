@@ -1,4 +1,4 @@
-﻿import sys
+import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -8,7 +8,7 @@ from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandle
 from config import settings
 from database.session import init_db
 from bot.handlers import (
-    start_command, help_command, search_command, report_command, reports_command, setlimit_command,
+    start_command, help_command, search_command, numinfo_command, report_command, reports_command, setlimit_command,
     editwelcome_command, editbanner_command, sources_command, history_command, settings_command, 
     button_handler, contact_handler, setup_bot_commands
 )
@@ -29,6 +29,11 @@ def main():
 
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("help", help_command))
+    app.add_handler(CommandHandler("numinfo", numinfo_command))
+    app.add_handler(CommandHandler("num", numinfo_command))
+    app.add_handler(CommandHandler("phone", numinfo_command))
+    app.add_handler(CommandHandler("phoneinfo", numinfo_command))
+    app.add_handler(CommandHandler("numsearch", numinfo_command))
     app.add_handler(CommandHandler("search", search_command))
     app.add_handler(CommandHandler("research", search_command))
     app.add_handler(CommandHandler("report", report_command))
