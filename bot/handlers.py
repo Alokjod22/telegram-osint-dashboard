@@ -422,7 +422,21 @@ async def numinfo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             is_query=True
         )
 
-    if not context.args:
+    # Extract target phone number from args or text
+    phone_query = ""
+    if context.args:
+        phone_query = " ".join(context.args).strip()
+    elif update.message and update.message.text:
+        raw_text = update.message.text.strip()
+        parts = raw_text.split(maxsplit=1)
+        if len(parts) > 1:
+            phone_query = parts[1].strip()
+        else:
+            match = re.search(r"(\+?\d[\d\s\-]{7,15}\d)", raw_text)
+            if match:
+                phone_query = match.group(1).strip()
+
+    if not phone_query:
         await update.message.reply_text(
             "📞 *PHONE NUMBER TO INFO OSINT TOOL*\n"
             "━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -431,47 +445,60 @@ async def numinfo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "• `/numinfo +919876543210` (India 🇮🇳)\n"
             "• `/numinfo +14155552671` (US 🇺🇸)\n"
             "• `/numinfo +447911123456` (UK 🇬🇧)\n\n"
-            "Extracts country, region, telecom carrier, line type, WhatsApp & Telegram links, Truecaller footprint & AI risk rating!",
+            "💡 *Pro-Tip*: You can also paste any phone number directly in chat (e.g. `+917248964895`)!",
             parse_mode="Markdown"
         )
         return
 
-    phone_query = " ".join(context.args).strip()
-    msg = await update.message.reply_text(f"📞 *Executing Phone OSINT Lookup* for `{phone_query}`...\nPlease wait while telecom & OSINT adapters run.", parse_mode="Markdown")
-
-    res = await research_manager.execute_investigation(phone_query, search_type="PHONE")
-    inv_id = res["investigation_id"]
-    data = res["data"]
-
-    output_text = f"📞 *PHONE NUMBER TO INFO DOSSIER*\n" \
-                  f"━━━━━━━━━━━━━━━━━━━━\n\n" \
-                  f"🆔 *Investigation ID*: `{inv_id}`\n" \
-                  f"📲 *Input Target*: `{data.get('input_phone', phone_query)}`\n" \
-                  f"🌐 *Normalized E.164*: `{data.get('normalized_e164', phone_query)}`\n" \
-                  f"🌍 *Country*: {data.get('country', 'Unknown')} ({data.get('country_code', 'INTL')})\n" \
-                  f"📍 *Region*: {data.get('region', 'Global')}\n" \
-                  f"📡 *Estimated Carrier*: {data.get('carrier_hint', 'Telecom Provider')}\n" \
-                  f"🏷️ *Line Type*: {data.get('line_type', 'Mobile Line')}\n" \
-                  f"🛡️ *Risk Score*: `{data.get('risk_score', 'LOW')}`\n" \
-                  f"⚠️ *Risk Indicators*: {', '.join(data.get('risk_factors', ['None']))}\n\n" \
-                  f"🔗 *DIRECT LOOKUP & FOOTPRINT LINKS*:\n" \
-                  f"• [💬 WhatsApp Direct Chat]({data.get('whatsapp_url', '#')})\n" \
-                  f"• [✈️ Telegram Contact Link]({data.get('telegram_url', '#')})\n" \
-                  f"• [🔍 Truecaller Search]({data.get('truecaller_url', '#')})\n" \
-                  f"• [🌐 Google OSINT Footprint]({data.get('google_dork_url', '#')})\n"
-
-    if "ai_analysis" in res and "ai_analysis" in res["ai_analysis"]:
-        output_text += f"\n🤖 *AI Risk & Intelligence Brief*:\n{res['ai_analysis']['ai_analysis'][:500]}\n"
-
-    await msg.edit_text(output_text, parse_mode="Markdown", disable_web_page_preview=True)
+    try:
+        msg = await update.message.reply_text(f"📞 *Executing Phone OSINT Lookup* for `{phone_query}`...\nPlease wait while telecom & OSINT adapters run.", parse_mode="Markdown")
+    except Exception:
+        msg = await update.message.reply_text(f"📞 Executing Phone OSINT Lookup for {phone_query}...\nPlease wait...")
 
     try:
-        from config import settings
-        user_info = f"@{user.username}" if user and user.username else f"User {user.id if user else 'Unknown'}"
-        admin_log = f"🔔 *ADMIN AUDIT LOG — PHONE OSINT LOOKUP*\n\n• *User*: {user_info}\n• *Target*: {phone_query}\n• *Investigation ID*: {inv_id}"
-        await context.bot.send_message(chat_id=settings.ADMIN_CHAT_ID, text=admin_log, parse_mode="Markdown")
-    except Exception:
-        pass
+        res = await research_manager.execute_investigation(phone_query, search_type="PHONE")
+        inv_id = res.get("investigation_id", "INV-PHONE")
+        data = res.get("data", {})
+
+        output_text = f"📞 *PHONE NUMBER TO INFO DOSSIER*\n" \
+                      f"━━━━━━━━━━━━━━━━━━━━\n\n" \
+                      f"🆔 *Investigation ID*: `{inv_id}`\n" \
+                      f"📲 *Input Target*: `{data.get('input_phone', phone_query)}`\n" \
+                      f"🌐 *Normalized E.164*: `{data.get('normalized_e164', phone_query)}`\n" \
+                      f"🌍 *Country*: {data.get('country', 'Unknown')} ({data.get('country_code', 'INTL')})\n" \
+                      f"📍 *Region*: {data.get('region', 'Global')}\n" \
+                      f"📡 *Estimated Carrier*: {data.get('carrier_hint', 'Telecom Provider')}\n" \
+                      f"🏷️ *Line Type*: {data.get('line_type', 'Mobile Line')}\n" \
+                      f"🛡️ *Risk Score*: `{data.get('risk_score', 'LOW')}`\n" \
+                      f"⚠️ *Risk Indicators*: {', '.join(data.get('risk_factors', ['None']))}\n\n" \
+                      f"🔗 *DIRECT LOOKUP & FOOTPRINT LINKS*:\n" \
+                      f"• [💬 WhatsApp Direct Chat]({data.get('whatsapp_url', '#')})\n" \
+                      f"• [✈️ Telegram Contact Link]({data.get('telegram_url', '#')})\n" \
+                      f"• [🔍 Truecaller Search]({data.get('truecaller_url', '#')})\n" \
+                      f"• [🌐 Google OSINT Footprint]({data.get('google_dork_url', '#')})\n"
+
+        if "ai_analysis" in res and "ai_analysis" in res["ai_analysis"]:
+            output_text += f"\n🤖 *AI Risk & Intelligence Brief*:\n{res['ai_analysis']['ai_analysis'][:500]}\n"
+
+        try:
+            await msg.edit_text(output_text, parse_mode="Markdown", disable_web_page_preview=True)
+        except Exception:
+            await msg.edit_text(output_text, disable_web_page_preview=True)
+
+        try:
+            from config import settings
+            user_info = f"@{user.username}" if user and user.username else f"User {user.id if user else 'Unknown'}"
+            admin_log = f"🔔 *ADMIN AUDIT LOG — PHONE OSINT LOOKUP*\n\n• *User*: {user_info}\n• *Target*: {phone_query}\n• *Investigation ID*: {inv_id}"
+            await context.bot.send_message(chat_id=settings.ADMIN_CHAT_ID, text=admin_log, parse_mode="Markdown")
+        except Exception:
+            pass
+
+    except Exception as e:
+        err_msg = f"⚠️ *Phone Lookup Error*: Unable to process target `{phone_query}` ({str(e)}).\nPlease verify the phone number format (e.g. +919876543210)."
+        try:
+            await msg.edit_text(err_msg, parse_mode="Markdown")
+        except Exception:
+            await update.message.reply_text(err_msg)
 
 
 async def report_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -711,17 +738,65 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.reply_text("❌ Case cancelled.", parse_mode="Markdown")
 
 
-import re
+async def unknown_command_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Automatic AI Assistant when user enters an unrecognized or mistyped command."""
+    if not await check_user_verification(update):
+        return
+
+    text = update.message.text.strip() if update.message and update.message.text else ""
+    cmd = text.split()[0] if text else ""
+
+    # Check if text contains a phone number e.g. /numinfoo +919876543210
+    clean_digits = re.sub(r"[^\d+]", "", text)
+    is_phone = (clean_digits.startswith("+") and len(clean_digits) >= 8) or (len(clean_digits) >= 9 and clean_digits.isdigit())
+
+    if is_phone:
+        match = re.search(r"(\+?\d[\d\s\-]{7,15}\d)", text)
+        phone_target = match.group(1).strip() if match else text
+        notice = f"🤖 *GEMINI AI AUTO-ASSISTANT*\n" \
+                 f"━━━━━━━━━━━━━━━━━━━━\n\n" \
+                 f"💡 *Command Hint*: Unrecognized command `{cmd}`.\n" \
+                 f"⚡ *Auto-Executing Phone OSINT* for `{phone_target}`..."
+        await update.message.reply_text(notice, parse_mode="Markdown")
+        context.args = [phone_target]
+        await numinfo_command(update, context)
+        return
+
+    # Check if text contains domain or username
+    if "." in text or text.startswith("@"):
+        notice = f"🤖 *GEMINI AI AUTO-ASSISTANT*\n" \
+                 f"━━━━━━━━━━━━━━━━━━━━\n\n" \
+                 f"💡 *Command Hint*: Unrecognized command `{cmd}`.\n" \
+                 f"⚡ *Auto-Executing Universal OSINT Search* for `{text}`..."
+        await update.message.reply_text(notice, parse_mode="Markdown")
+        context.args = text.split()
+        await search_command(update, context)
+        return
+
+    # Fallback AI Guidance
+    ai_guidance = f"🤖 *GEMINI AI AUTO-ASSISTANT*\n" \
+                  f"━━━━━━━━━━━━━━━━━━━━\n\n" \
+                  f"⚠️ *Unrecognized Command*: `{cmd}`\n\n" \
+                  f"✨ *Available Active Commands*:\n" \
+                  f"• `/numinfo <phone_number>` — Phone Number OSINT Lookup\n" \
+                  f"• `/search <query>` — Domain, Username & Web Search\n" \
+                  f"• `/research <query>` — AI Entity Correlation & Deep Research\n" \
+                  f"• `/report <url> <category_id>` — Draft Abuse Evidence Docket\n" \
+                  f"• `/profile` — View your account telemetry\n" \
+                  f"• `/help` — Full interactive guide"
+    await update.message.reply_text(ai_guidance, parse_mode="Markdown")
+
 
 async def fallback_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Fallback handler. Checks verification. If user sends a phone number directly, triggers numinfo_command!"""
+    """Fallback handler for plain text messages. Runs numinfo if phone number, search if domain/username, or AI Assistant otherwise."""
     user = update.effective_user
     if not user:
         return
 
     text = update.message.text.strip() if update.message and update.message.text else ""
-    
-    # Clean digits for phone check
+    if not text:
+        return
+
     clean_digits = re.sub(r"[^\d+]", "", text)
     is_phone_like = (clean_digits.startswith("+") and len(clean_digits) >= 8) or (len(clean_digits) >= 9 and clean_digits.isdigit())
 
@@ -729,5 +804,12 @@ async def fallback_text_handler(update: Update, context: ContextTypes.DEFAULT_TY
         return
 
     if is_phone_like:
-        context.args = [text]
+        match = re.search(r"(\+?\d[\d\s\-]{7,15}\d)", text)
+        phone_target = match.group(1).strip() if match else text
+        context.args = [phone_target]
         await numinfo_command(update, context)
+    elif "." in text or text.startswith("@"):
+        context.args = text.split()
+        await search_command(update, context)
+    else:
+        await unknown_command_handler(update, context)

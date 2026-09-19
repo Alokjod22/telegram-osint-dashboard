@@ -10,7 +10,7 @@ from database.session import init_db
 from bot.handlers import (
     start_command, help_command, search_command, numinfo_command, report_command, reports_command, setlimit_command,
     editwelcome_command, editbanner_command, sources_command, history_command, settings_command, 
-    button_handler, contact_handler, fallback_text_handler, setup_bot_commands
+    button_handler, contact_handler, fallback_text_handler, unknown_command_handler, setup_bot_commands
 )
 
 logging.basicConfig(
@@ -45,6 +45,7 @@ def main():
     app.add_handler(CommandHandler("history", history_command))
     app.add_handler(CommandHandler("settings", settings_command))
     app.add_handler(MessageHandler(filters.CONTACT, contact_handler))
+    app.add_handler(MessageHandler(filters.COMMAND, unknown_command_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, fallback_text_handler))
     app.add_handler(CallbackQueryHandler(button_handler))
 
