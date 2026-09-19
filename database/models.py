@@ -141,4 +141,16 @@ class WelcomeConfig(Base):
     value = Column(Text, nullable=True)
 
 
+class ChatMessage(Base):
+    __tablename__ = "chat_messages"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    telegram_id = Column(String(50), nullable=False, index=True)
+    username = Column(String(100), nullable=True)
+    sender_type = Column(String(20), default="USER") # USER or BOT
+    message_text = Column(Text, nullable=False)
+    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
+
+
+
 

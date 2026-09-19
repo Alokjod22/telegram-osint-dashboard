@@ -1,12 +1,25 @@
 import httpx
 import re
+import urllib.parse
 from typing import Dict, Any, List
 
 class NewsWebAdapter:
     """OSINT adapter for searching news articles, web content, and indexing phone numbers/entities across the live internet."""
 
     @staticmethod
-    async def search_web(query: str, max_results: int = 5) -> List[Dict[str, Any]]:
+    def _clean_target_url(raw_url: str) -> str:
+        if not raw_url:
+            return "#"
+        if "uddg=" in raw_url:
+            match = re.search(r"uddg=([^&]+)", raw_url)
+            if match:
+                return urllib.parse.unquote(match.group(1))
+        if raw_url.startswith("//"):
+            return "https:" + raw_url
+        return raw_url
+
+    @classmethod
+    async def search_web(cls, query: str, max_results: int = 5) -> List[Dict[str, Any]]:
         results = []
         url = "https://html.duckduckgo.com/html/"
         headers = {
@@ -30,9 +43,10 @@ class NewsWebAdapter:
                             snippet_a = body.find("a", class_="result__snippet")
                             url_a = body.find("a", class_="result__url")
                             if title_a:
-                                title = title_a.get_text(strip=True)
-                                snippet = snippet_a.get_text(strip=True) if snippet_a else ""
-                                link = url_a.get("href", "").strip() if url_a else title_a.get("href", "").strip()
+                                title = title_a.get_text(strip=True).replace("[", "").replace("]", "")
+                                snippet = snippet_a.get_text(strip=True).replace("[", "").replace("]", "") if snippet_a else ""
+                                raw_link = url_a.get("href", "").strip() if url_a else title_a.get("href", "").strip()
+                                link = cls._clean_target_url(raw_link)
                                 results.append({
                                     "title": title,
                                     "snippet": snippet,
@@ -44,9 +58,10 @@ class NewsWebAdapter:
                         snippets = re.findall(r'class="result__snippet[^"]*"[^>]*>(.*?)</a>', resp.text, re.DOTALL)
                         urls = re.findall(r'class="result__url"[^>]*href="([^"]+)"', resp.text)
                         for i in range(min(len(titles), max_results)):
-                            clean_title = re.sub(r'<[^>]+>', '', titles[i]).strip()
-                            clean_snip = re.sub(r'<[^>]+>', '', snippets[i]).strip() if i < len(snippets) else ""
-                            clean_url = urls[i].strip() if i < len(urls) else ""
+                            clean_title = re.sub(r'<[^>]+>', '', titles[i]).strip().replace("[", "").replace("]", "")
+                            clean_snip = re.sub(r'<[^>]+>', '', snippets[i]).strip().replace("[", "").replace("]", "") if i < len(snippets) else ""
+                            raw_url = urls[i].strip() if i < len(urls) else ""
+                            clean_url = cls._clean_target_url(raw_url)
                             results.append({
                                 "title": clean_title,
                                 "snippet": clean_snip,

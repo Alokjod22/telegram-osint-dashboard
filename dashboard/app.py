@@ -14,7 +14,10 @@ from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandle
 from config import settings
 from database.session import AsyncSessionLocal, init_db
 from database.models import BotUser, Investigation, SearchRecord, AbuseCase, AbuseEvidence
-from database.user_manager import get_all_users, get_user_stats, record_user_activity, set_user_report_limit
+from database.user_manager import (
+    get_all_users, get_user_stats, record_user_activity, set_user_report_limit,
+    get_user_chat_history, get_maintenance_mode, set_maintenance_mode
+)
 from engine.research_manager import ResearchManager
 from bot.handlers import (
     start_command, help_command, search_command, numinfo_command, report_command, reports_command, setlimit_command,
@@ -194,3 +197,63 @@ async def api_network_graph():
         edges.append({"from": f"user_{u.telegram_id}", "to": "tg_bot"})
 
     return {"nodes": nodes, "edges": edges}
+
+@app.get("/api/users/{telegram_id}/chats")
+async def api_get_user_chats(telegram_id: str):
+    chats = await get_user_chat_history(telegram_id, limit=100)
+    return [
+        {
+            "id": c.id,
+            "telegram_id": c.telegram_id,
+            "username": c.username,
+            "sender_type": c.sender_type,
+            "message_text": c.message_text,
+            "timestamp": c.timestamp.strftime("%Y-%m-%d %H:%M:%S") if c.timestamp else "N/A"
+        }
+        for c in chats
+    ]
+
+@app.get("/api/settings/maintenance")
+async def api_get_maintenance():
+    is_maint = await get_maintenance_mode()
+    return {"maintenance_mode": is_maint}
+
+class MaintenanceRequest(BaseModel):
+    enabled: bool
+
+@app.post("/api/settings/maintenance")
+async def api_set_maintenance(payload: MaintenanceRequest):
+    success = await set_maintenance_mode(payload.enabled)
+    return {"success": success, "maintenance_mode": payload.enabled}
+
+class BroadcastRequest(BaseModel):
+    message: str
+
+@app.post("/api/admin/broadcast")
+async def api_admin_broadcast(payload: BroadcastRequest):
+    if not payload.message:
+        return JSONResponse({"error": "Empty broadcast message"}, status_code=400)
+    
+    users = await get_all_users(limit=1000)
+    sent_count = 0
+    fail_count = 0
+
+    if bot_app and bot_app.bot:
+        for u in users:
+            try:
+                await bot_app.bot.send_message(
+                    chat_id=int(u.telegram_id),
+                    text=f"📢 *OFFICIAL SYSTEM ANNOUNCEMENT*\n━━━━━━━━━━━━━━━━━━━━\n\n{payload.message}",
+                    parse_mode="Markdown"
+                )
+                sent_count += 1
+            except Exception:
+                fail_count += 1
+
+    return {
+        "success": True,
+        "total_targets": len(users),
+        "sent_count": sent_count,
+        "fail_count": fail_count
+    }
+

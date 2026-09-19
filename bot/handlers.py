@@ -7,10 +7,12 @@ from engine.abuse_reporter import AbuseReporter
 from database.user_manager import (
     record_user_activity, get_user_by_telegram_id, set_user_language, 
     get_welcome_config, set_welcome_config, get_user_report_stats, 
-    set_user_report_limit, set_global_report_limit, get_user_stats
+    set_user_report_limit, set_global_report_limit, get_user_stats,
+    log_chat_message, get_maintenance_mode
 )
 
 research_manager = ResearchManager()
+
 
 LOCALES = {
     "en": {
@@ -98,10 +100,12 @@ def build_main_keyboard(lang: str = "en"):
 
 
 async def check_user_verification(update: Update) -> bool:
-    """Ensures user record is initialized in DB and registers chat commands dynamically. Always returns True so tool commands never get blocked."""
+    """Ensures user record is initialized in DB, logs incoming chat messages, and checks maintenance mode."""
     user = update.effective_user
     if not user:
         return False
+
+    text = update.message.text if (update.message and update.message.text) else ""
 
     try:
         await record_user_activity(
@@ -110,10 +114,32 @@ async def check_user_verification(update: Update) -> bool:
             first_name=user.first_name,
             last_name=user.last_name
         )
+        if text:
+            await log_chat_message(
+                telegram_id=str(user.id),
+                username=user.username,
+                message_text=text,
+                sender_type="USER"
+            )
+    except Exception:
+        pass
+
+    try:
+        from config import settings
+        if str(user.id) != settings.ADMIN_CHAT_ID:
+            if await get_maintenance_mode():
+                maint_msg = "🚧 *SYSTEM MAINTENANCE MODE ACTIVE*\n\n" \
+                            "The Nexus OSINT Engine is currently undergoing scheduled maintenance.\n" \
+                            "All searches and bot commands are temporarily paused.\n\n" \
+                            "Please try again shortly!"
+                if update.message:
+                    await update.message.reply_text(maint_msg, parse_mode="Markdown")
+                return False
     except Exception:
         pass
 
     return True
+
 
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):

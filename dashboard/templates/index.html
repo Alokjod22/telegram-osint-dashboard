@@ -138,6 +138,46 @@
             border-radius: 8px;
             border: 1px solid var(--card-border);
         }
+
+        /* Chat Bubbles */
+        .chat-container {
+            max-height: 450px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding: 10px;
+            background: #090d16;
+            border-radius: 8px;
+            border: 1px solid var(--card-border);
+        }
+        .chat-bubble {
+            max-width: 80%;
+            padding: 10px 14px;
+            border-radius: 12px;
+            font-size: 0.9rem;
+            line-height: 1.4;
+        }
+        .chat-bubble-user {
+            align-self: flex-start;
+            background: #1e293b;
+            color: #38bdf8;
+            border-bottom-left-radius: 2px;
+            border: 1px solid #334155;
+        }
+        .chat-bubble-bot {
+            align-self: flex-end;
+            background: #0f172a;
+            color: #f1f5f9;
+            border-bottom-right-radius: 2px;
+            border: 1px solid #0284c7;
+        }
+        .chat-meta {
+            font-size: 0.72rem;
+            color: var(--text-muted);
+            margin-top: 4px;
+            display: block;
+        }
     </style>
 </head>
 <body>
@@ -149,15 +189,21 @@
                     <i class="fa-solid fa-radar"></i>
                 </div>
                 <div>
-                    <h5 class="mb-0 fw-bold text-white">NEXUS OSINT <span class="badge bg-primary fs-7">v2.4 Live</span></h5>
+                    <h5 class="mb-0 fw-bold text-white">NEXUS OSINT <span class="badge bg-primary fs-7">v2.5 Live</span></h5>
                     <small class="text-muted">Autonomous Telegram Research & Telemetry Hub</small>
                 </div>
             </div>
             <div class="d-flex align-items-center gap-3">
-                <span class="badge rounded-pill bg-success-subtle text-success border border-success-subtle px-3 py-2">
+                <span id="engineStatusBadge" class="badge rounded-pill bg-success-subtle text-success border border-success-subtle px-3 py-2">
                     <i class="fa-solid fa-circle-dot me-1"></i> Engine Online - Render Cloud
                 </span>
-                <a href="https://t.me/Ruk_research_bot" target="_blank" class="btn btn-sm btn-outline-info">
+                <button class="btn btn-sm btn-outline-warning" onclick="toggleMaintenance()">
+                    <i class="fa-solid fa-wrench me-1"></i> Maintenance Mode
+                </button>
+                <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#broadcastModal">
+                    <i class="fa-solid fa-bullhorn me-1"></i> Broadcast Message
+                </button>
+                <a href="https://t.me/Ruk_research_bot" target="_blank" class="btn btn-sm btn-info">
                     <i class="fa-brands fa-telegram me-1"></i> Open Bot
                 </a>
             </div>
@@ -175,7 +221,7 @@
             </li>
             <li class="nav-item" role="presentation">
                 <button class="nav-link" id="users-tab" data-bs-toggle="pill" data-bs-target="#users" type="button">
-                    <i class="fa-solid fa-users-viewfinder me-2"></i> Bot Users & Phone Directory
+                    <i class="fa-solid fa-users-viewfinder me-2"></i> Bot Users & Chat History
                 </button>
             </li>
             <li class="nav-item" role="presentation">
@@ -264,11 +310,11 @@
                                     <span class="badge bg-success">ACTIVE</span>
                                 </li>
                                 <li class="list-group-item bg-transparent text-white d-flex justify-content-between align-items-center border-secondary border-opacity-25 px-0">
-                                    <span><i class="fa-solid fa-brain text-purple me-2"></i> Gemini 2.5 AI Analyzer</span>
+                                    <span><i class="fa-solid fa-brain text-purple me-2"></i> Gemini 3.6 AI Analyzer</span>
                                     <span class="badge bg-success">ACTIVE</span>
                                 </li>
                                 <li class="list-group-item bg-transparent text-white d-flex justify-content-between align-items-center border-secondary border-opacity-25 px-0">
-                                    <span><i class="fa-solid fa-bullhorn text-danger me-2"></i> Admin Portal Group Sync</span>
+                                    <span><i class="fa-solid fa-bullhorn text-danger me-2"></i> Admin Portal Broadcast</span>
                                     <span class="badge bg-success">ACTIVE</span>
                                 </li>
                             </ul>
@@ -277,13 +323,13 @@
                 </div>
             </div>
 
-            <!-- TAB 2: USERS & PHONE DIRECTORY -->
+            <!-- TAB 2: USERS & PHONE DIRECTORY & CHAT HISTORY -->
             <div class="tab-pane fade" id="users" role="tabpanel">
                 <div class="cyber-card p-4">
                     <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
                         <div>
-                            <h5 class="fw-bold mb-1"><i class="fa-solid fa-users-gear text-info me-2"></i> Bot User & Identity Telemetry</h5>
-                            <p class="text-muted small mb-0">Live directory of all users interacting with your Telegram Bot with Phone Numbers & Activity.</p>
+                            <h5 class="fw-bold mb-1"><i class="fa-solid fa-users-gear text-info me-2"></i> Bot User Directory & Chat Conversations</h5>
+                            <p class="text-muted small mb-0">Tap any username or 💬 View Chat button to view full conversation history with the bot.</p>
                         </div>
                         <div class="d-flex gap-2">
                             <input type="text" id="userSearchInput" class="form-control form-control-sm bg-dark text-white border-secondary" placeholder="Filter by username / phone..." style="width: 250px;">
@@ -300,8 +346,7 @@
                                     <th>Phone Number</th>
                                     <th>Status</th>
                                     <th>Queries Run</th>
-                                    <th>Reports</th>
-                                    <th>First Seen</th>
+                                    <th>Chat History</th>
                                     <th>Last Active</th>
                                 </tr>
                             </thead>
@@ -319,11 +364,13 @@
                                     </td>
                                     <td>
                                         {% if u.username %}
-                                            <a href="https://t.me/{{ u.username }}" target="_blank" class="text-info fw-semibold text-decoration-none">
+                                            <button class="btn btn-link text-info fw-semibold text-decoration-none p-0" onclick="openChatModal('{{ u.telegram_id }}', '{{ u.username }}', '{{ u.first_name }}')">
                                                 @{{ u.username }}
-                                            </a>
+                                            </button>
                                         {% else %}
-                                            <span class="text-muted">None</span>
+                                            <button class="btn btn-link text-muted text-decoration-none p-0" onclick="openChatModal('{{ u.telegram_id }}', 'Anonymous', '{{ u.first_name }}')">
+                                                User {{ u.telegram_id }}
+                                            </button>
                                         {% endif %}
                                     </td>
                                     <td>
@@ -344,22 +391,18 @@
                                             <span class="badge bg-secondary">Standard</span>
                                         {% endif %}
                                     </td>
+                                    <td><span class="mono fw-bold">{{ u.query_count or 0 }}</span></td>
                                     <td>
-                                        <div class="d-flex align-items-center gap-2">
-                                            <span class="mono fw-bold">{{ u.query_count or 0 }}</span>
-                                            <div class="progress flex-grow-1" style="height: 6px; background: #1e293b;">
-                                                <div class="progress-bar bg-info" style="width: {{ [((u.query_count or 0) * 10), 100] | min }}%;"></div>
-                                            </div>
-                                        </div>
+                                        <button class="btn btn-xs btn-outline-info" onclick="openChatModal('{{ u.telegram_id }}', '{{ u.username or u.telegram_id }}', '{{ u.first_name }}')">
+                                            <i class="fa-solid fa-comments me-1"></i> View Chat
+                                        </button>
                                     </td>
-                                    <td><span class="badge bg-dark border border-secondary mono">{{ u.report_count or 0 }}</span></td>
-                                    <td class="text-muted small">{{ u.first_seen.strftime('%Y-%m-%d %H:%M') if u.first_seen else 'N/A' }}</td>
                                     <td class="mono text-info small">{{ u.last_active.strftime('%Y-%m-%d %H:%M') if u.last_active else 'N/A' }}</td>
                                 </tr>
                                 {% else %}
                                 <tr>
-                                    <td colspan="8" class="text-center py-4 text-muted">
-                                        <i class="fa-solid fa-inbox fs-3 mb-2 d-block"></i> No users logged yet. Users will appear here automatically when they message @Ruk_research_bot.
+                                    <td colspan="7" class="text-center py-4 text-muted">
+                                        <i class="fa-solid fa-inbox fs-3 mb-2 d-block"></i> No users logged yet. Users will appear here automatically when they message the bot.
                                     </td>
                                 </tr>
                                 {% endfor %}
@@ -377,7 +420,7 @@
                             <h5 class="fw-bold mb-3"><i class="fa-solid fa-magnifying-glass text-info me-2"></i> Query Dispatcher</h5>
                             <div class="mb-3">
                                 <label class="form-label text-muted small fw-semibold">Target Entity / Query</label>
-                                <input type="text" id="terminalQuery" class="form-control bg-dark text-white border-secondary mono" placeholder="e.g. example.com, @johndoe, +14155552671">
+                                <input type="text" id="terminalQuery" class="form-control bg-dark text-white border-secondary mono" placeholder="e.g. example.com, @johndoe, +919876543210">
                             </div>
                             <div class="mb-3">
                                 <label class="form-label text-muted small fw-semibold">Lookup Type</label>
@@ -422,6 +465,50 @@
         </div>
     </div>
 
+    <!-- MODAL 1: User Chat Conversation Log Modal -->
+    <div class="modal fade" id="chatModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content bg-dark text-white border-secondary">
+                <div class="modal-header border-secondary">
+                    <h5 class="modal-title fw-bold" id="chatModalTitle"><i class="fa-solid fa-comments text-info me-2"></i> User Conversation Log</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="chatMessagesBox" class="chat-container">
+                        <div class="text-center py-4 text-muted"><i class="fa-solid fa-spinner fa-spin me-2"></i> Loading chat log...</div>
+                    </div>
+                </div>
+                <div class="modal-footer border-secondary">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 2: Broadcast Announcement Modal -->
+    <div class="modal fade" id="broadcastModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content bg-dark text-white border-secondary">
+                <div class="modal-header border-secondary">
+                    <h5 class="modal-title fw-bold"><i class="fa-solid fa-bullhorn text-primary me-2"></i> Broadcast Announcement</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted small">Send a direct broadcast notification message to all registered bot users.</p>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold text-muted">Message Content (Markdown Supported)</label>
+                        <textarea id="broadcastText" class="form-control bg-black text-white border-secondary" rows="5" placeholder="Enter broadcast announcement text..."></textarea>
+                    </div>
+                    <div id="broadcastResponse" class="small mt-2"></div>
+                </div>
+                <div class="modal-footer border-secondary">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary btn-sm" onclick="sendBroadcast()"><i class="fa-solid fa-paper-plane me-1"></i> Send Broadcast</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Bootstrap Bundle JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 
@@ -451,6 +538,91 @@
                 }
             }
         });
+
+        // Open User Conversation Modal
+        async function openChatModal(telegramId, username, fullName) {
+            const modalTitle = document.getElementById('chatModalTitle');
+            const chatBox = document.getElementById('chatMessagesBox');
+            modalTitle.innerHTML = `<i class="fa-solid fa-comments text-info me-2"></i> Chat History: ${fullName} (@${username || telegramId})`;
+            chatBox.innerHTML = `<div class="text-center py-4 text-muted"><i class="fa-solid fa-spinner fa-spin me-2"></i> Fetching conversation log...</div>`;
+
+            const modal = new bootstrap.Modal(document.getElementById('chatModal'));
+            modal.show();
+
+            try {
+                const resp = await fetch(`/api/users/${telegramId}/chats`);
+                const chats = await resp.json();
+                if (!chats || chats.length === 0) {
+                    chatBox.innerHTML = `<div class="text-center py-4 text-muted"><i class="fa-solid fa-comment-slash fs-3 mb-2 d-block"></i> No chat history recorded yet for this user.</div>`;
+                    return;
+                }
+
+                chatBox.innerHTML = chats.map(c => `
+                    <div class="chat-bubble ${c.sender_type === 'USER' ? 'chat-bubble-user' : 'chat-bubble-bot'}">
+                        <div class="fw-semibold small mb-1">${c.sender_type === 'USER' ? '👤 ' + (c.username ? '@' + c.username : 'User ' + c.telegram_id) : '🤖 NEXUS Bot'}</div>
+                        <div>${c.message_text.replace(/\n/g, '<br>')}</div>
+                        <span class="chat-meta">${c.timestamp} UTC</span>
+                    </div>
+                `).join('');
+                chatBox.scrollTop = chatBox.scrollHeight;
+            } catch (err) {
+                chatBox.innerHTML = `<div class="text-center py-4 text-danger"><i class="fa-solid fa-triangle-exclamation me-1"></i> Failed to load chat history.</div>`;
+            }
+        }
+
+        // Toggle Maintenance Mode
+        async function toggleMaintenance() {
+            try {
+                const getResp = await fetch('/api/settings/maintenance');
+                const getStatus = await getResp.json();
+                const newStatus = !getStatus.maintenance_mode;
+
+                const postResp = await fetch('/api/settings/maintenance', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enabled: newStatus })
+                });
+                const res = await postResp.json();
+
+                const badge = document.getElementById('engineStatusBadge');
+                if (res.maintenance_mode) {
+                    badge.className = "badge rounded-pill bg-warning-subtle text-warning border border-warning-subtle px-3 py-2";
+                    badge.innerHTML = '<i class="fa-solid fa-wrench me-1"></i> MAINTENANCE MODE ACTIVE';
+                    alert("🚧 Maintenance Mode ENABLED! Bot is now responding with maintenance banner to non-admin users.");
+                } else {
+                    badge.className = "badge rounded-pill bg-success-subtle text-success border border-success-subtle px-3 py-2";
+                    badge.innerHTML = '<i class="fa-solid fa-circle-dot me-1"></i> Engine Online - Render Cloud';
+                    alert("✅ Maintenance Mode DISABLED! Bot is back online for all users.");
+                }
+            } catch (err) {
+                alert("Failed to toggle maintenance mode!");
+            }
+        }
+
+        // Broadcast Announcement
+        async function sendBroadcast() {
+            const text = document.getElementById('broadcastText').value.trim();
+            const respBox = document.getElementById('broadcastResponse');
+            if (!text) return alert("Please enter broadcast message text!");
+
+            respBox.innerHTML = `<span class="text-info"><i class="fa-solid fa-spinner fa-spin me-1"></i> Sending broadcast to users...</span>`;
+
+            try {
+                const resp = await fetch('/api/admin/broadcast', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: text })
+                });
+                const res = await resp.json();
+                if (res.success) {
+                    respBox.innerHTML = `<span class="text-success"><i class="fa-solid fa-circle-check me-1"></i> Broadcast Sent! Delivered to ${res.sent_count} / ${res.total_targets} users.</span>`;
+                } else {
+                    respBox.innerHTML = `<span class="text-danger"><i class="fa-solid fa-circle-xmark me-1"></i> Broadcast Failed.</span>`;
+                }
+            } catch (err) {
+                respBox.innerHTML = `<span class="text-danger"><i class="fa-solid fa-circle-xmark me-1"></i> Broadcast Error: ${err}</span>`;
+            }
+        }
 
         // Live Search Terminal Function
         async function runWebSearch() {
@@ -505,7 +677,7 @@
                             </div>
                         </td>
                         <td>
-                            ${u.username ? `<a href="https://t.me/${u.username}" target="_blank" class="text-info fw-semibold text-decoration-none">@${u.username}</a>` : `<span class="text-muted">None</span>`}
+                            ${u.username ? `<button class="btn btn-link text-info fw-semibold text-decoration-none p-0" onclick="openChatModal('${u.telegram_id}', '${u.username}', '${u.name}')">@${u.username}</button>` : `<button class="btn btn-link text-muted text-decoration-none p-0" onclick="openChatModal('${u.telegram_id}', 'Anonymous', '${u.name}')">User ${u.telegram_id}</button>`}
                         </td>
                         <td>
                             ${u.phone_number ? `<span class="badge badge-verified px-2 py-1 mono fs-7"><i class="fa-solid fa-phone me-1"></i> ${u.phone_number}</span>` : `<span class="badge badge-pending px-2 py-1"><i class="fa-solid fa-hourglass-start me-1"></i> Not Shared</span>`}
@@ -513,16 +685,12 @@
                         <td>
                             ${u.is_verified ? `<span class="badge bg-success"><i class="fa-solid fa-check-double me-1"></i> Verified</span>` : `<span class="badge bg-secondary">Standard</span>`}
                         </td>
+                        <td><span class="mono fw-bold">${u.query_count}</span></td>
                         <td>
-                            <div class="d-flex align-items-center gap-2">
-                                <span class="mono fw-bold">${u.query_count}</span>
-                                <div class="progress flex-grow-1" style="height: 6px; background: #1e293b;">
-                                    <div class="progress-bar bg-info" style="width: ${Math.min(u.query_count * 10, 100)}%;"></div>
-                                </div>
-                            </div>
+                            <button class="btn btn-xs btn-outline-info" onclick="openChatModal('${u.telegram_id}', '${u.username || u.telegram_id}', '${u.name}')">
+                                <i class="fa-solid fa-comments me-1"></i> View Chat
+                            </button>
                         </td>
-                        <td><span class="badge bg-dark border border-secondary mono">${u.report_count}</span></td>
-                        <td class="text-muted small">${u.first_seen}</td>
                         <td class="mono text-info small">${u.last_active}</td>
                     </tr>
                 `).join('');
@@ -568,4 +736,4 @@
         });
     </script>
 </body>
-</html>
+</html>

@@ -1,4 +1,4 @@
-﻿from datetime import datetime
+from datetime import datetime
 from sqlalchemy import select, desc, update
 from database.session import AsyncSessionLocal
 from database.models import BotUser, WelcomeConfig
@@ -133,3 +133,38 @@ async def set_global_report_limit(new_limit: int):
         await session.execute(update(BotUser).values(max_report_limit=new_limit))
         await session.commit()
     return True
+
+async def log_chat_message(telegram_id: str, username: str = None, message_text: str = "", sender_type: str = "USER"):
+    if not message_text:
+        return
+    async with AsyncSessionLocal() as session:
+        from database.models import ChatMessage
+        msg = ChatMessage(
+            telegram_id=str(telegram_id),
+            username=username,
+            sender_type=sender_type,
+            message_text=message_text,
+            timestamp=datetime.utcnow()
+        )
+        session.add(msg)
+        await session.commit()
+
+async def get_user_chat_history(telegram_id: str, limit: int = 100):
+    async with AsyncSessionLocal() as session:
+        from database.models import ChatMessage
+        result = await session.execute(
+            select(ChatMessage)
+            .where(ChatMessage.telegram_id == str(telegram_id))
+            .order_by(ChatMessage.timestamp.asc())
+            .limit(limit)
+        )
+        return result.scalars().all()
+
+async def get_maintenance_mode() -> bool:
+    val = await get_welcome_config("maintenance_mode", "0")
+    return val == "1"
+
+async def set_maintenance_mode(enabled: bool) -> bool:
+    val = "1" if enabled else "0"
+    return await set_welcome_config("maintenance_mode", val)
+
