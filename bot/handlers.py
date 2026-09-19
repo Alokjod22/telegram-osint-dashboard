@@ -1,6 +1,6 @@
 import json
 from datetime import datetime
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup, BotCommand
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup, BotCommand, BotCommandScopeDefault, BotCommandScopeChat
 from telegram.ext import ContextTypes
 from engine.research_manager import ResearchManager
 from engine.abuse_reporter import AbuseReporter
@@ -18,7 +18,7 @@ LOCALES = {
         "tagline": "Premium • Autonomous • Enterprise Intelligence",
         "greeting_new": "👋 *Welcome to NEXUS OSINT*, {first_name}!",
         "greeting_returning": "👋 *Welcome back*, {first_name}!",
-        "features": "✨ *CORE CAPABILITIES*\n⚡ *Fast OSINT*: DNS, Username & Phone Metadata\n🛡️ *Abuse Evidence*: Cryptographic SHA-256 Dockets\n🤖 *Gemini 2.5 AI*: Neural Entity Extraction\n🌐 *Cloud Portal*: 24/7 Web Command Center",
+        "features": "✨ *CORE CAPABILITIES*\n⚡ *Fast OSINT*: DNS, Username & Phone Metadata\n🛡️ *Abuse Evidence*: Cryptographic SHA-256 Dockets\n🤖 *Gemini 2.5 AI*: Neural Entity Extraction\n🌐 *Cloud Infrastructure*: 24/7 Enterprise Node",
         "profile_title": "👤 *INVESTIGATOR PROFILE*",
         "dashboard_title": "📊 *SYSTEM TELEMETRY & DASHBOARD*",
         "ai_title": "🤖 *GEMINI AI ASSISTANT*",
@@ -31,7 +31,7 @@ LOCALES = {
         "tagline": "प्रीमियम • तेज़ • स्वायत्त इंटेलिजेंस",
         "greeting_new": "👋 *नेक्सस OSINT में आपका स्वागत है*, {first_name}!",
         "greeting_returning": "👋 *वापसी पर आपका स्वागत है*, {first_name}!",
-        "features": "✨ *मुख्य सुविधाएं*\n⚡ *त्वरित खोज*: डोमेन, यूज़रनेम और फ़ोन डेटा\n🛡️ *रिपोर्टिंग*: SHA-256 सबूत रिपोर्ट प्रणाली\n🤖 *जेमिनी AI*: एआई विश्लेषण और संक्षेप\n🌐 *वेब पोर्टल*: 24/7 लाइव कमांड सेंटर",
+        "features": "✨ *मुख्य सुविधाएं*\n⚡ *त्वरित खोज*: डोमेन, यूज़रनेम और फ़ोन डेटा\n🛡️ *रिपोर्टिंग*: SHA-256 सबूत रिपोर्ट प्रणाली\n🤖 *जेमिनी AI*: एआई विश्लेषण और संक्षेप\n🌐 *क्लाउड इंफ्रास्ट्रक्चर*: 24/7 एंटरप्राइज नोड",
         "profile_title": "👤 *उपयोगकर्ता प्रोफाइल*",
         "dashboard_title": "📊 *सिस्टम डैशबोर्ड*",
         "ai_title": "🤖 *जेमिनी AI सहायक*",
@@ -44,7 +44,7 @@ LOCALES = {
         "tagline": "प्रीमियम • वेगवान • अत्याधुनिक बुद्धिमत्ता",
         "greeting_new": "👋 *नेक्सस OSINT मध्ये आपले स्वागत आहे*, {first_name}!",
         "greeting_returning": "👋 *पुन्हा स्वागत आहे*, {first_name}!",
-        "features": "✨ *प्रमुख वैशिष्ट्ये*\n⚡ *जलद शोध*: डोमेन, वापरकर्ता नाव आणि फोन माहिती\n🛡️ *अहवाल*: SHA-256 पुरावा अहवाल\n🤖 *जेमिनी AI*: AI विश्लेषण आणि सारांश\n🌐 *वेब पोर्टल*: 24/7 थेट कमांड सेंटर",
+        "features": "✨ *प्रमुख वैशिष्ट्ये*\n⚡ *जलद शोध*: डोमेन, वापरकर्ता नाव आणि फोन माहिती\n🛡️ *अहवाल*: SHA-256 पुरावा अहवाल\n🤖 *जेमिनी AI*: AI विश्लेषण आणि सारांश\n🌐 *क्लाउड पायाभूत सुविधा*: 24/7 एंटरप्राइझ नोड",
         "profile_title": "👤 *वापरकर्ता प्रोफाइल*",
         "dashboard_title": "📊 *सिस्टम डॅशबोर्ड*",
         "ai_title": "🤖 *जेमिनी AI सहाय्यक*",
@@ -55,7 +55,15 @@ LOCALES = {
 }
 
 async def setup_bot_commands(application):
-    """Register command suggestions in Telegram UI so typing / shows all available commands."""
+    """Set default scope commands to ONLY /start so unverified users see NO feature commands in their / menu."""
+    default_commands = [
+        BotCommand("start", "🚀 Tap Start button below to initialize & unlock bot commands")
+    ]
+    await application.bot.set_my_commands(default_commands, scope=BotCommandScopeDefault())
+
+
+async def unlock_user_commands(bot, chat_id: int):
+    """Dynamically register all OSINT feature commands for a verified user's chat_id in Telegram UI."""
     commands = [
         BotCommand("start", "Launch Premium Dashboard & Navigation"),
         BotCommand("numinfo", "📞 Phone Number to Info OSINT Lookup"),
@@ -71,7 +79,10 @@ async def setup_bot_commands(application):
         BotCommand("settings", "View system settings & live portal link"),
         BotCommand("help", "Display full interactive help guide")
     ]
-    await application.bot.set_my_commands(commands)
+    try:
+        await bot.set_my_commands(commands, scope=BotCommandScopeChat(chat_id=chat_id))
+    except Exception as e:
+        pass
 
 
 def build_main_keyboard(lang: str = "en"):
@@ -162,9 +173,11 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=reply_markup)
 
-    if not is_verified:
+    if is_verified:
+        await unlock_user_commands(context.bot, user.id)
+    else:
         await update.message.reply_text(
-            "👇 *1st Priority Required Step: Tap 🚀 Start below to verify your phone number & unlock all features:*",
+            "👇 *1st Priority Required Step: Tap 🚀 Start below to verify your phone number & unlock all bot commands:*",
             reply_markup=contact_markup
         )
 
@@ -182,12 +195,16 @@ async def contact_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             phone_number=phone
         )
         lang = db_user.language_code if db_user else "en"
+        
+        # Unlock user commands in Telegram UI
+        await unlock_user_commands(context.bot, user.id)
+
         msg = f"🎉 *IDENTITY & PHONE VERIFIED SUCCESSFULLY!*\n\n" \
               f"👤 *Name*: {user.first_name}\n" \
               f"🏷️ *Username*: @{user.username or 'None'}\n" \
               f"📱 *Phone*: `{phone}`\n\n" \
-              f"🚀 *All Bot Features Unlocked!* You can now run OSINT searches (`/search`), Phone Lookup (`/numinfo`), AI research, and abuse reporting.\n\n" \
-              f"👇 *Tap any feature button below to begin:* "
+              f"🚀 *All Bot Commands & Features Unlocked!* You can now run OSINT searches (`/search`), Phone Lookup (`/numinfo`), AI research, and abuse reporting.\n\n" \
+              f"👇 *Tap any feature button below or type / to see unlocked commands:* "
         
         await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=build_main_keyboard(lang))
 
@@ -238,13 +255,15 @@ async def dashboard_handler():
            f"📱 *Phone Verified Accounts*: {stats['verified_users']}\n" \
            f"🔍 *Total OSINT Queries Run*: {stats['total_queries']}\n" \
            f"📑 *Abuse Reports Drafted*: {stats['total_reports']}\n\n" \
-           f"🌐 *Web Command Center*: https://telegram-osint-dashboard.onrender.com\n" \
-           f"⚡ *Engine Health*: ONLINE • Render Cloud\n" \
+           f"⚡ *Engine Health*: ONLINE • Render Cloud Node\n" \
            f"🤖 *AI Model*: Gemini 2.5 Flash\n" \
            f"━━━━━━━━━━━━━━━━━━━━"
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await check_user_verification(update):
+        return
+
     help_text = "ℹ️ *NEXUS OSINT BOT HELP & GUIDE*\n" \
                 "━━━━━━━━━━━━━━━━━━━━\n\n" \
                 "*Core Commands Reference*:\n" \
@@ -282,6 +301,9 @@ async def reports_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def setlimit_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await check_user_verification(update):
+        return
+
     user = update.effective_user
     if not user:
         return
@@ -500,6 +522,9 @@ async def report_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def sources_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await check_user_verification(update):
+        return
+
     sources_text = "🌐 *Active OSINT Data Source Adapters*:\n\n" \
                    "1. *Domain & DNS Resolver*: DNS (A, MX, TXT, NS), RDAP/WHOIS, HTTP Headers.\n" \
                    "2. *Username Search Engine*: Multi-platform lookup (GitHub, Twitter, Reddit, Medium).\n" \
@@ -510,6 +535,9 @@ async def sources_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def history_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await check_user_verification(update):
+        return
+
     history_text = "📚 *Recent Investigation History*:\n\n" \
                    "• INV-A92F10B2 - example.com (Domain OSINT)\n" \
                    "• INV-4C8E91A0 - @targetuser (Username Search)\n" \
@@ -518,12 +546,15 @@ async def history_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await check_user_verification(update):
+        return
+
     settings_text = "⚙️ *OSINT Platform Settings*:\n\n" \
                     "• *Database*: SQLite / PostgreSQL (Async Engine)\n" \
                     "• *AI Engine*: Gemini API (gemini-2.5-flash)\n" \
                     "• *Max Workers*: 5 Parallel Threads\n" \
                     "• *Rate Limit Handling*: Active\n" \
-                    "• *Web Admin Portal*: https://telegram-osint-dashboard.onrender.com"
+                    "• *Cloud Node*: Render Secured Instance"
     await update.message.reply_text(settings_text, parse_mode="Markdown")
 
 
@@ -609,8 +640,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
               "• Truecaller Search & Google OSINT Footprints\n" \
               "• Neural AI Risk Score Assessment\n\n" \
               "💡 *How to Use*:\n" \
-              "Send `/numinfo <phone_number>` or `/phone <phone_number>` in chat!\n\n" \
-              "Example: `/numinfo +919876543210`"
+              "Send `/numinfo <phone_number>` or send any phone number directly in chat!\n\n" \
+              "Example: `/numinfo +919876543210` or `+917248964895`"
         await query.edit_message_text(txt, parse_mode="Markdown", reply_markup=back_markup)
 
     elif data == "menu_profile":
@@ -632,7 +663,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "menu_help":
         txt = "📚 *NEXUS OSINT INTERACTIVE HELP*\n" \
               "━━━━━━━━━━━━━━━━━━━━\n\n" \
-              "• Send /search <query> to begin a quick lookup.\n" \
+              "• Send /numinfo <phone> or any phone number to run Phone OSINT.\n" \
+              "• Send /search <query> to begin a quick domain or username lookup.\n" \
               "• Send /research <query> for AI entity correlation.\n" \
               "• Send /report <url> <category_id> for abuse evidence collection.\n" \
               "• Send /reports to check your sent reports counter.\n" \
@@ -654,7 +686,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
               "━━━━━━━━━━━━━━━━━━━━\n\n" \
               "• *Engine*: FastAPI / Uvicorn + Async SQLAlchemy\n" \
               "• *AI Core*: Gemini 2.5 Flash API\n" \
-              "• *Web Portal*: https://telegram-osint-dashboard.onrender.com\n" \
+              "• *Cloud Node*: Render Secured Instance\n" \
               "• *Telemetry*: Active"
         await query.edit_message_text(txt, parse_mode="Markdown", reply_markup=back_markup)
 
@@ -677,3 +709,25 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif data == "cancel_case":
         await query.message.reply_text("❌ Case cancelled.", parse_mode="Markdown")
+
+
+import re
+
+async def fallback_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Fallback handler. Checks verification. If user sends a phone number directly, triggers numinfo_command!"""
+    user = update.effective_user
+    if not user:
+        return
+
+    text = update.message.text.strip() if update.message and update.message.text else ""
+    
+    # Clean digits for phone check
+    clean_digits = re.sub(r"[^\d+]", "", text)
+    is_phone_like = (clean_digits.startswith("+") and len(clean_digits) >= 8) or (len(clean_digits) >= 9 and clean_digits.isdigit())
+
+    if not await check_user_verification(update):
+        return
+
+    if is_phone_like:
+        context.args = [text]
+        await numinfo_command(update, context)
