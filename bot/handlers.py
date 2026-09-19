@@ -86,7 +86,7 @@ async def unlock_user_commands(bot, chat_id: int):
 
 
 def build_main_keyboard(lang: str = "en"):
-    channel_url = "https://t.me/Ruk_research_bot"
+    channel_url = "https://t.me/RukOsintBot"
     keyboard = [
         [InlineKeyboardButton("📞 Phone to Info", callback_data="menu_numinfo"), InlineKeyboardButton("🛒 Explore Features", callback_data="menu_explore")],
         [InlineKeyboardButton("👤 My Profile", callback_data="menu_profile"), InlineKeyboardButton("📊 Dashboard", callback_data="menu_dashboard")],
@@ -98,33 +98,22 @@ def build_main_keyboard(lang: str = "en"):
 
 
 async def check_user_verification(update: Update) -> bool:
-    """Gatekeeper: Checks if user has tapped 🚀 Start to link/verify their phone number before allowing tool access."""
+    """Ensures user record is initialized in DB and registers chat commands dynamically. Always returns True so tool commands never get blocked."""
     user = update.effective_user
     if not user:
         return False
 
-    db_user = await get_user_by_telegram_id(str(user.id))
-    if db_user and (db_user.is_verified or db_user.phone_number):
-        return True
+    try:
+        await record_user_activity(
+            telegram_id=str(user.id),
+            username=user.username,
+            first_name=user.first_name,
+            last_name=user.last_name
+        )
+    except Exception:
+        pass
 
-    contact_keyboard = [[KeyboardButton("🚀 Start", request_contact=True)]]
-    contact_markup = ReplyKeyboardMarkup(contact_keyboard, resize_keyboard=True, one_time_keyboard=False)
-
-    lock_msg = f"🔒 *VERIFICATION REQUIRED — ACCESS LOCKED*\n" \
-               f"━━━━━━━━━━━━━━━━━━━━\n\n" \
-               f"👋 Hello *{user.first_name}*!\n\n" \
-               f"⚠️ *1st Priority Requirement*: To use any bot feature (OSINT Search, Phone Lookup, AI Assistant, Abuse Reports), you MUST tap the *🚀 Start* button in the bottom keyboard to verify your account.\n\n" \
-               f"👇 *Tap the 🚀 Start button below now to unlock full access:* "
-
-    if update.message:
-        await update.message.reply_text(lock_msg, parse_mode="Markdown", reply_markup=contact_markup)
-    elif update.callback_query:
-        await update.callback_query.answer("⚠️ Verification Required! Tap 🚀 Start below in your chat keyboard to unlock.", show_alert=True)
-        try:
-            await update.callback_query.message.reply_text(lock_msg, parse_mode="Markdown", reply_markup=contact_markup)
-        except Exception:
-            pass
-    return False
+    return True
 
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
