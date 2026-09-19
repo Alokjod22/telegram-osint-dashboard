@@ -6,7 +6,7 @@ class Settings(BaseSettings):
 
     PROJECT_NAME: str = "Telegram OSINT Research Bot"
     TELEGRAM_BOT_TOKEN: str = os.getenv("TELEGRAM_BOT_TOKEN", "YOUR_TELEGRAM_BOT_TOKEN")
-    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
+    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "AQ.Ab8RN6LrkX3rRGj7-57037pyUW3wRBjB1uDX6JPjXfTIC2bk9g")
     DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./osint_bot.db")
     DASHBOARD_HOST: str = os.getenv("DASHBOARD_HOST", "0.0.0.0")
     DASHBOARD_PORT: int = int(os.getenv("DASHBOARD_PORT", "8000"))

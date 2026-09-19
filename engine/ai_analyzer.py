@@ -6,14 +6,21 @@ class AIAnalyzer:
     """AI Analysis engine using Gemini API with automatic model failover fallback for summarization, entity correlation, and report generation."""
 
     def __init__(self):
+        self.api_key = settings.GEMINI_API_KEY or "AQ.Ab8RN6LrkX3rRGj7-57037pyUW3wRBjB1uDX6JPjXfTIC2bk9g"
         self.client = None
-        if settings.GEMINI_API_KEY:
+        if self.api_key:
             try:
-                self.client = genai.Client(api_key=settings.GEMINI_API_KEY)
+                self.client = genai.Client(api_key=self.api_key)
             except Exception:
                 self.client = None
 
     async def analyze_findings(self, query: str, raw_data: dict) -> dict:
+        if not self.client and self.api_key:
+            try:
+                self.client = genai.Client(api_key=self.api_key)
+            except Exception:
+                pass
+
         if not self.client:
             web_hits = len(raw_data.get("live_web_results", []))
             return {
@@ -39,10 +46,13 @@ Write a concise, professional OSINT Intelligence Brief in clear plain text / Mar
 """
 
         models_to_try = [
+            'gemini-3.6-flash',
+            'gemini-3.1-pro-preview',
+            'gemini-3.5-flash',
+            'gemini-2.5-flash',
             'gemini-2.0-flash',
             'gemini-1.5-flash',
-            'gemini-2.5-flash',
-            'gemini-2.5-pro'
+            'gemini-flash-latest'
         ]
 
         last_error = ""
