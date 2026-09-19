@@ -2,7 +2,7 @@ import re
 from typing import Dict, Any
 
 class PhoneAdapter:
-    """Advanced OSINT adapter for phone number metadata, E.164 normalization, carrier estimation, risk scoring, and OSINT footprint links."""
+    """Advanced OSINT adapter for phone number metadata, E.164 normalization, carrier estimation, risk scoring, and multi-platform OSINT footprint links."""
 
     COUNTRY_CODES = {
         "91": {"country": "India 🇮🇳", "code": "IN", "region": "South Asia", "currency": "INR", "carrier_hint": "Jio / Airtel / Vi / BSNL"},
@@ -57,11 +57,21 @@ class PhoneAdapter:
 
         valid_format = 7 <= len(digits_only) <= 15
 
-        # Links & Footprints
+        # Multi-Platform Footprint Links
         whatsapp_url = f"https://wa.me/{digits_only}"
         telegram_url = f"https://t.me/+{digits_only}"
+        signal_url = f"https://signal.me/#p/{clean_digits}"
         truecaller_url = f"https://www.truecaller.com/search/{country_info['code'].lower()}/{digits_only}"
+        
+        twitter_url = f"https://twitter.com/search?q=%22{digits_only}%22+OR+%22{clean_digits}%22"
+        facebook_url = f"https://www.facebook.com/search/top/?q={digits_only}"
+        linkedin_url = f"https://www.google.com/search?q=site:linkedin.com/in/+%22{digits_only}%22+OR+%22{clean_digits}%22"
+        instagram_url = f"https://www.google.com/search?q=site:instagram.com+%22{digits_only}%22+OR+%22{clean_digits}%22"
+        skype_url = f"https://www.google.com/search?q=site:skype.com+%22{digits_only}%22"
+
         google_dork_url = f"https://www.google.com/search?q=%22{clean_digits}%22+OR+%22{digits_only}%22"
+        social_dork_url = f"https://www.google.com/search?q=%22{digits_only}%22+site:facebook.com+OR+site:instagram.com+OR+site:twitter.com+OR+site:linkedin.com"
+        breach_dork_url = f"https://www.google.com/search?q=%22{digits_only}%22+leak+OR+breach+OR+pastebin"
 
         # Risk scoring heuristic
         risk_score = "LOW"
@@ -88,6 +98,14 @@ class PhoneAdapter:
             "risk_factors": risk_factors if risk_factors else ["Clean format"],
             "whatsapp_url": whatsapp_url,
             "telegram_url": telegram_url,
+            "signal_url": signal_url,
             "truecaller_url": truecaller_url,
-            "google_dork_url": google_dork_url
+            "twitter_url": twitter_url,
+            "facebook_url": facebook_url,
+            "linkedin_url": linkedin_url,
+            "instagram_url": instagram_url,
+            "skype_url": skype_url,
+            "google_dork_url": google_dork_url,
+            "social_dork_url": social_dork_url,
+            "breach_dork_url": breach_dork_url
         }

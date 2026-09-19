@@ -434,7 +434,7 @@ async def numinfo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "• `/numinfo +919876543210` (India 🇮🇳)\n"
             "• `/numinfo +14155552671` (US 🇺🇸)\n"
             "• `/numinfo +447911123456` (UK 🇬🇧)\n\n"
-            "💡 *Pro-Tip*: You can also paste any phone number directly in chat (e.g. `+917248964895`)!",
+            "💡 *Pro-Tip*: You can also paste any phone number directly in chat (e.g. `+919876543210`)!",
             parse_mode="Markdown"
         )
         return
@@ -460,14 +460,31 @@ async def numinfo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                       f"🏷️ *Line Type*: {data.get('line_type', 'Mobile Line')}\n" \
                       f"🛡️ *Risk Score*: `{data.get('risk_score', 'LOW')}`\n" \
                       f"⚠️ *Risk Indicators*: {', '.join(data.get('risk_factors', ['None']))}\n\n" \
-                      f"🔗 *DIRECT LOOKUP & FOOTPRINT LINKS*:\n" \
+                      f"🌐 *DIRECT CONTACT & MESSAGING FOOTPRINTS*:\n" \
                       f"• [💬 WhatsApp Direct Chat]({data.get('whatsapp_url', '#')})\n" \
                       f"• [✈️ Telegram Contact Link]({data.get('telegram_url', '#')})\n" \
-                      f"• [🔍 Truecaller Search]({data.get('truecaller_url', '#')})\n" \
-                      f"• [🌐 Google OSINT Footprint]({data.get('google_dork_url', '#')})\n"
+                      f"• [💬 Signal Direct Link]({data.get('signal_url', '#')})\n" \
+                      f"• [🔍 Truecaller Caller ID]({data.get('truecaller_url', '#')})\n\n" \
+                      f"📱 *SOCIAL MEDIA FOOTPRINT SEARCHES*:\n" \
+                      f"• [🐦 Twitter / X Search]({data.get('twitter_url', '#')})\n" \
+                      f"• [📘 Facebook People Search]({data.get('facebook_url', '#')})\n" \
+                      f"• [💼 LinkedIn Profile Search]({data.get('linkedin_url', '#')})\n" \
+                      f"• [📸 Instagram Profile Search]({data.get('instagram_url', '#')})\n" \
+                      f"• [🎧 Skype User Search]({data.get('skype_url', '#')})\n\n" \
+                      f"🔎 *ADVANCED DEEP OSINT DORKS*:\n" \
+                      f"• [🌐 Google OSINT Footprint]({data.get('google_dork_url', '#')})\n" \
+                      f"• [📲 Multi-Social Media Dork]({data.get('social_dork_url', '#')})\n" \
+                      f"• [🚨 Breach & Leak Footprint Dork]({data.get('breach_dork_url', '#')})\n"
 
-        if "ai_analysis" in res and "ai_analysis" in res["ai_analysis"]:
-            output_text += f"\n🤖 *AI Risk & Intelligence Brief*:\n{res['ai_analysis']['ai_analysis'][:500]}\n"
+        ai_brief = None
+        if "ai_analysis" in res:
+            if isinstance(res["ai_analysis"], dict):
+                ai_brief = res["ai_analysis"].get("ai_analysis") or res["ai_analysis"].get("summary")
+            elif isinstance(res["ai_analysis"], str):
+                ai_brief = res["ai_analysis"]
+
+        if ai_brief:
+            output_text += f"\n🤖 *AI Risk & Intelligence Brief*:\n{str(ai_brief)[:600]}\n"
 
         try:
             await msg.edit_text(output_text, parse_mode="Markdown", disable_web_page_preview=True)
@@ -657,7 +674,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
               "• Neural AI Risk Score Assessment\n\n" \
               "💡 *How to Use*:\n" \
               "Send `/numinfo <phone_number>` or send any phone number directly in chat!\n\n" \
-              "Example: `/numinfo +919876543210` or `+917248964895`"
+              "Example: `/numinfo +919876543210` or `+919876543211`"
         await query.edit_message_text(txt, parse_mode="Markdown", reply_markup=back_markup)
 
     elif data == "menu_profile":
