@@ -40,7 +40,7 @@ class ResearchManager:
         elif search_type == "USERNAME":
             results["data"] = await UsernameAdapter.search_username(query_clean)
         elif search_type == "PHONE":
-            results["data"] = PhoneAdapter.analyze_phone(query_clean)
+            results["data"] = await PhoneAdapter.analyze_phone_async(query_clean)
         else:
             results["data"] = {"web_results": await NewsWebAdapter.search_web(query_clean)}
 

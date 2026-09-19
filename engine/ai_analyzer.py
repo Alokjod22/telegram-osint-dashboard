@@ -15,24 +15,26 @@ class AIAnalyzer:
 
     async def analyze_findings(self, query: str, raw_data: dict) -> dict:
         if not self.client:
+            web_hits = len(raw_data.get("live_web_results", []))
             return {
-                "summary": f"OSINT Investigation results for: {query}. (Gemini API key not configured for AI analysis)",
+                "ai_analysis": f"OSINT Investigation for target: {query}. Discovered {web_hits} live internet records. (Configure GEMINI_API_KEY for deep AI neural brief).",
+                "summary": f"OSINT Investigation for target: {query}. Discovered {web_hits} live internet records.",
                 "entities": [],
                 "timeline": []
             }
 
         prompt = f"""
-You are an expert OSINT Intelligence Analyst.
-Analyze the following public OSINT data for query: '{query}'.
+You are an expert OSINT Senior Threat Intelligence Analyst.
+Analyze all collected public OSINT data and live internet search findings for query: '{query}'.
 
-Data:
-{json.dumps(raw_data, indent=2)[:4000]}
+Target Data & Live Web Footprints:
+{json.dumps(raw_data, indent=2)[:6000]}
 
-Provide a JSON response with:
-1. "summary": A concise executive summary of key findings.
-2. "entities": A list of extracted entities (person, organization, domain, location).
-3. "timeline": Key dates or events discovered.
-4. "confidence_score": Confidence score from 0.0 to 1.0 based on public evidence.
+Write a concise, professional OSINT Intelligence Brief in clear plain text / Markdown:
+1. 👤 Target Identity & Associated Names: Mention any real names, aliases, corporate entities, or handles extracted from the web search snippets (or state if none indexed).
+2. 🌐 Online Footprint & Indexed Pages: Summarize indexed pages, Truecaller entries, social media profile hints, or leak/paste occurrences.
+3. 🛡️ Risk & Threat Assessment: Evaluate threat level (Low/Medium/High) based on exposure and carrier/location hints.
+4. 💡 Key Takeaway / Investigation Next Step.
 """
 
         try:
@@ -40,6 +42,11 @@ Provide a JSON response with:
                 model='gemini-2.5-flash',
                 contents=prompt
             )
-            return {"ai_analysis": response.text}
+            text_res = response.text.strip()
+            return {
+                "ai_analysis": text_res,
+                "summary": text_res
+            }
         except Exception as e:
-            return {"error": f"AI analysis error: {str(e)}", "summary": "Failed to generate AI analysis."}
+            err_msg = f"AI analysis error: {str(e)}"
+            return {"ai_analysis": err_msg, "summary": err_msg, "error": str(e)}

@@ -1,8 +1,9 @@
 import re
-from typing import Dict, Any
+from typing import Dict, Any, List
+from adapters.news_web_adapter import NewsWebAdapter
 
 class PhoneAdapter:
-    """Advanced OSINT adapter for phone number metadata, E.164 normalization, carrier estimation, risk scoring, and multi-platform OSINT footprint links."""
+    """Advanced OSINT adapter for phone number metadata, E.164 normalization, carrier estimation, risk scoring, multi-platform footprints, and live web OSINT indexing."""
 
     COUNTRY_CODES = {
         "91": {"country": "India 🇮🇳", "code": "IN", "region": "South Asia", "currency": "INR", "carrier_hint": "Jio / Airtel / Vi / BSNL"},
@@ -107,5 +108,23 @@ class PhoneAdapter:
             "skype_url": skype_url,
             "google_dork_url": google_dork_url,
             "social_dork_url": social_dork_url,
-            "breach_dork_url": breach_dork_url
+            "breach_dork_url": breach_dork_url,
+            "live_web_results": []
         }
+
+    @classmethod
+    async def analyze_phone_async(cls, phone_raw: str) -> Dict[str, Any]:
+        data = cls.analyze_phone(phone_raw)
+        digits_only = data["digits_only"]
+        clean_digits = data["normalized_e164"]
+
+        # Run live web OSINT search across the internet
+        query_str = f"{digits_only}"
+        web_results = await NewsWebAdapter.search_web(query_str, max_results=5)
+        
+        # If no results found with digits_only, try with clean_digits E.164
+        if not web_results and clean_digits != digits_only:
+            web_results = await NewsWebAdapter.search_web(clean_digits, max_results=5)
+
+        data["live_web_results"] = web_results
+        return data

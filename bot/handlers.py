@@ -459,13 +459,25 @@ async def numinfo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                       f"📡 *Estimated Carrier*: {data.get('carrier_hint', 'Telecom Provider')}\n" \
                       f"🏷️ *Line Type*: {data.get('line_type', 'Mobile Line')}\n" \
                       f"🛡️ *Risk Score*: `{data.get('risk_score', 'LOW')}`\n" \
-                      f"⚠️ *Risk Indicators*: {', '.join(data.get('risk_factors', ['None']))}\n\n" \
-                      f"🌐 *DIRECT CONTACT & MESSAGING FOOTPRINTS*:\n" \
+                      f"⚠️ *Risk Indicators*: {', '.join(data.get('risk_factors', ['None']))}\n\n"
+
+        web_results = data.get("live_web_results", [])
+        if web_results:
+            output_text += f"🌐 *LIVE INTERNET SEARCH FOOTPRINTS ({len(web_results)} Found)*:\n"
+            for w in web_results[:3]:
+                title = w.get("title", "Indexed Result").replace("[", "").replace("]", "")
+                snippet = w.get("snippet", "")[:100].replace("[", "").replace("]", "")
+                url = w.get("url", "#")
+                output_text += f"• [{title}]({url})\n  _{snippet}_\n"
+            output_text += "\n"
+        else:
+            output_text += "🌐 *LIVE INTERNET FOOTPRINTS*: No direct un-indexed web paste/leak records found for this exact number.\n\n"
+
+        output_text += f"📱 *DIRECT PLATFORM SEARCH LINKS*:\n" \
                       f"• [💬 WhatsApp Direct Chat]({data.get('whatsapp_url', '#')})\n" \
                       f"• [✈️ Telegram Contact Link]({data.get('telegram_url', '#')})\n" \
                       f"• [💬 Signal Direct Link]({data.get('signal_url', '#')})\n" \
-                      f"• [🔍 Truecaller Caller ID]({data.get('truecaller_url', '#')})\n\n" \
-                      f"📱 *SOCIAL MEDIA FOOTPRINT SEARCHES*:\n" \
+                      f"• [🔍 Truecaller Caller ID]({data.get('truecaller_url', '#')})\n" \
                       f"• [🐦 Twitter / X Search]({data.get('twitter_url', '#')})\n" \
                       f"• [📘 Facebook People Search]({data.get('facebook_url', '#')})\n" \
                       f"• [💼 LinkedIn Profile Search]({data.get('linkedin_url', '#')})\n" \
@@ -484,7 +496,8 @@ async def numinfo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 ai_brief = res["ai_analysis"]
 
         if ai_brief:
-            output_text += f"\n🤖 *AI Risk & Intelligence Brief*:\n{str(ai_brief)[:600]}\n"
+            clean_ai = str(ai_brief).replace("[", "").replace("]", "")[:600]
+            output_text += f"\n🤖 *NEURAL AI RECONNAISSANCE BRIEF*:\n{clean_ai}\n"
 
         try:
             await msg.edit_text(output_text, parse_mode="Markdown", disable_web_page_preview=True)
