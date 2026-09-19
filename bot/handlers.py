@@ -87,20 +87,47 @@ async def unlock_user_commands(bot, chat_id: int):
         pass
 
 
-def build_main_keyboard(lang: str = "en"):
-    channel_url = "https://t.me/RukOsintBot"
+REQUIRED_CHANNELS = [
+    {"name": "ZUZMOD Channel", "username": "@ZUZMOD", "url": "https://t.me/ZUZMOD"},
+    {"name": "RukCheatos OSINT", "username": "@RukCheatosint", "url": "https://t.me/RukCheatosint"}
+]
+
+async def get_unjoined_channels(bot, user_id: int):
+    unjoined = []
+    for ch in REQUIRED_CHANNELS:
+        try:
+            member = await bot.get_chat_member(chat_id=ch["username"], user_id=user_id)
+            if member.status not in ["creator", "administrator", "member"]:
+                unjoined.append(ch)
+        except Exception:
+            # If bot is not admin in channel, pass check
+            pass
+    return unjoined
+
+
+def build_force_sub_keyboard():
     keyboard = [
-        [InlineKeyboardButton("📞 Phone to Info", callback_data="menu_numinfo"), InlineKeyboardButton("🛒 Explore Features", callback_data="menu_explore")],
-        [InlineKeyboardButton("👤 My Profile", callback_data="menu_profile"), InlineKeyboardButton("📊 Dashboard", callback_data="menu_dashboard")],
-        [InlineKeyboardButton("🤖 AI Assistant", callback_data="menu_ai"), InlineKeyboardButton("⚙️ Settings", callback_data="menu_settings")],
-        [InlineKeyboardButton("📑 Abuse Reports", callback_data="menu_reports"), InlineKeyboardButton("📚 Help & Guide", callback_data="menu_help")],
-        [InlineKeyboardButton("🌐 Language / भाषा", callback_data="menu_lang"), InlineKeyboardButton("📢 Official Channel", url=channel_url)]
+        [InlineKeyboardButton("📢 1. Join ZUZMOD Channel", url="https://t.me/ZUZMOD")],
+        [InlineKeyboardButton("📢 2. Join RukCheatos OSINT", url="https://t.me/RukCheatosint")],
+        [InlineKeyboardButton("✅ Verify Channel Membership", callback_data="verify_channels")]
     ]
     return InlineKeyboardMarkup(keyboard)
 
 
-async def check_user_verification(update: Update) -> bool:
-    """Ensures user record is initialized in DB, logs incoming chat messages, and checks maintenance mode."""
+def build_main_keyboard(lang: str = "en"):
+    keyboard = [
+        [InlineKeyboardButton("📢 Join ZUZMOD", url="https://t.me/ZUZMOD"), InlineKeyboardButton("📢 Join RukCheatos OSINT", url="https://t.me/RukCheatosint")],
+        [InlineKeyboardButton("📞 Phone to Info", callback_data="menu_numinfo"), InlineKeyboardButton("🛒 Explore Features", callback_data="menu_explore")],
+        [InlineKeyboardButton("👤 My Profile", callback_data="menu_profile"), InlineKeyboardButton("📊 Dashboard", callback_data="menu_dashboard")],
+        [InlineKeyboardButton("🤖 AI Assistant", callback_data="menu_ai"), InlineKeyboardButton("⚙️ Settings", callback_data="menu_settings")],
+        [InlineKeyboardButton("📑 Abuse Reports", callback_data="menu_reports"), InlineKeyboardButton("📚 Help & Guide", callback_data="menu_help")],
+        [InlineKeyboardButton("🌐 Language / भाषा", callback_data="menu_lang"), InlineKeyboardButton("🔄 Verify Channels", callback_data="verify_channels")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+async def check_user_verification(update: Update, context: ContextTypes.DEFAULT_TYPE = None) -> bool:
+    """Ensures user record is initialized in DB, logs incoming chat messages, checks maintenance mode & channel subscription."""
     user = update.effective_user
     if not user:
         return False
@@ -137,6 +164,25 @@ async def check_user_verification(update: Update) -> bool:
                 return False
     except Exception:
         pass
+
+    # Check Channel Subscriptions if context is provided
+    if context and context.bot:
+        try:
+            from config import settings
+            if str(user.id) != settings.ADMIN_CHAT_ID:
+                unjoined = await get_unjoined_channels(context.bot, user.id)
+                if unjoined:
+                    sub_msg = "📢 *MANDATORY CHANNEL SUBSCRIPTION REQUIRED*\n" \
+                              "━━━━━━━━━━━━━━━━━━━━\n\n" \
+                              "To unlock all OSINT commands & features, you must join our official channels:\n\n"
+                    for ch in unjoined:
+                        sub_msg += f"• [{ch['name']}]({ch['url']})\n"
+                    sub_msg += "\n👇 *Join both channels below and tap 'Verify Channel Membership':*"
+                    if update.message:
+                        await update.message.reply_text(sub_msg, parse_mode="Markdown", reply_markup=build_force_sub_keyboard(), disable_web_page_preview=True)
+                    return False
+        except Exception:
+            pass
 
     return True
 
@@ -794,6 +840,23 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif data == "cancel_case":
         await query.message.reply_text("❌ Case cancelled.", parse_mode="Markdown")
+
+    elif data == "verify_channels":
+        unjoined = await get_unjoined_channels(context.bot, user.id)
+        if unjoined:
+            txt = "⚠️ *CHANNEL SUBSCRIPTION INCOMPLETE*\n" \
+                  "━━━━━━━━━━━━━━━━━━━━\n\n" \
+                  "You have not joined all required channels yet:\n\n"
+            for ch in unjoined:
+                txt += f"❌ [{ch['name']}]({ch['url']})\n"
+            txt += "\nPlease join both channels above and tap 'Verify Channel Membership' again!"
+            await query.edit_message_text(txt, parse_mode="Markdown", reply_markup=build_force_sub_keyboard(), disable_web_page_preview=True)
+        else:
+            txt = "🎉 *CHANNEL SUBSCRIPTION VERIFIED!*\n" \
+                  "━━━━━━━━━━━━━━━━━━━━\n\n" \
+                  "Thank you for subscribing to our official channels!\n" \
+                  "All bot features, OSINT tools, and AI searches are now fully unlocked."
+            await query.edit_message_text(txt, parse_mode="Markdown", reply_markup=build_main_keyboard())
 
 
 async def unknown_command_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
