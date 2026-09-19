@@ -17,9 +17,9 @@ from database.models import BotUser, Investigation, SearchRecord, AbuseCase, Abu
 from database.user_manager import get_all_users, get_user_stats, record_user_activity, set_user_report_limit
 from engine.research_manager import ResearchManager
 from bot.handlers import (
-    start_command, help_command, search_command, report_command, reports_command, setlimit_command,
+    start_command, help_command, search_command, numinfo_command, report_command, reports_command, setlimit_command,
     editwelcome_command, editbanner_command, sources_command, history_command, settings_command, 
-    button_handler, contact_handler, setup_bot_commands
+    button_handler, contact_handler, fallback_text_handler, unknown_command_handler, setup_bot_commands
 )
 
 app = FastAPI(title="OSINT Bot Enterprise Admin Portal")
@@ -52,6 +52,11 @@ async def startup_event():
             bot_app = ApplicationBuilder().token(settings.TELEGRAM_BOT_TOKEN).post_init(setup_bot_commands).build()
             bot_app.add_handler(CommandHandler("start", start_command))
             bot_app.add_handler(CommandHandler("help", help_command))
+            bot_app.add_handler(CommandHandler("numinfo", numinfo_command))
+            bot_app.add_handler(CommandHandler("num", numinfo_command))
+            bot_app.add_handler(CommandHandler("phone", numinfo_command))
+            bot_app.add_handler(CommandHandler("phoneinfo", numinfo_command))
+            bot_app.add_handler(CommandHandler("numsearch", numinfo_command))
             bot_app.add_handler(CommandHandler("search", search_command))
             bot_app.add_handler(CommandHandler("research", search_command))
             bot_app.add_handler(CommandHandler("report", report_command))
@@ -63,6 +68,8 @@ async def startup_event():
             bot_app.add_handler(CommandHandler("history", history_command))
             bot_app.add_handler(CommandHandler("settings", settings_command))
             bot_app.add_handler(MessageHandler(filters.CONTACT, contact_handler))
+            bot_app.add_handler(MessageHandler(filters.COMMAND, unknown_command_handler))
+            bot_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, fallback_text_handler))
             bot_app.add_handler(CallbackQueryHandler(button_handler))
 
             await bot_app.initialize()
