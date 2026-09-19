@@ -461,6 +461,13 @@ async def numinfo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                       f"🛡️ *Risk Score*: `{data.get('risk_score', 'LOW')}`\n" \
                       f"⚠️ *Risk Indicators*: {', '.join(data.get('risk_factors', ['None']))}\n\n"
 
+        extracted_ids = data.get("extracted_id_cards", [])
+        if extracted_ids:
+            output_text += f"🪪 *EXTRACTED IDENTITY CARDS DETECTED ON WEB*:\n"
+            for id_item in extracted_ids[:3]:
+                output_text += f"• `{id_item}`\n"
+            output_text += "\n"
+
         web_results = data.get("live_web_results", [])
         if web_results:
             output_text += f"🌐 *LIVE INTERNET SEARCH FOOTPRINTS ({len(web_results)} Found)*:\n"
@@ -473,7 +480,13 @@ async def numinfo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             output_text += "🌐 *LIVE INTERNET FOOTPRINTS*: No direct un-indexed web paste/leak records found for this exact number.\n\n"
 
-        output_text += f"📱 *DIRECT PLATFORM SEARCH LINKS*:\n" \
+        output_text += f"🪪 *GOVERNMENT & IDENTITY CARD DORKS (Aadhaar / PAN)*:\n" \
+                      f"• [🪪 Aadhaar Card OSINT Dork]({data.get('aadhaar_dork_url', '#')})\n" \
+                      f"• [💳 PAN Card & Tax Record Dork]({data.get('pan_dork_url', '#')})\n" \
+                      f"• [🗳️ Voter ID & Electoral Roll Dork]({data.get('voter_dork_url', '#')})\n" \
+                      f"• [🏢 GSTIN & EPFO UAN Dork]({data.get('gstin_dork_url', '#')})\n" \
+                      f"• [🚨 Identity Leak & Public PDF Dork]({data.get('id_leak_dork_url', '#')})\n\n" \
+                      f"📱 *DIRECT PLATFORM SEARCH LINKS*:\n" \
                       f"• [💬 WhatsApp Direct Chat]({data.get('whatsapp_url', '#')})\n" \
                       f"• [✈️ Telegram Contact Link]({data.get('telegram_url', '#')})\n" \
                       f"• [💬 Signal Direct Link]({data.get('signal_url', '#')})\n" \
@@ -496,7 +509,7 @@ async def numinfo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 ai_brief = res["ai_analysis"]
 
         if ai_brief:
-            clean_ai = str(ai_brief).replace("[", "").replace("]", "")[:600]
+            clean_ai = str(ai_brief).replace("[", "").replace("]", "")[:700]
             output_text += f"\n🤖 *NEURAL AI RECONNAISSANCE BRIEF*:\n{clean_ai}\n"
 
         try:

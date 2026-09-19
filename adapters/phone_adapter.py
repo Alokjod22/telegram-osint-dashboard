@@ -3,7 +3,7 @@ from typing import Dict, Any, List
 from adapters.news_web_adapter import NewsWebAdapter
 
 class PhoneAdapter:
-    """Advanced OSINT adapter for phone number metadata, E.164 normalization, carrier estimation, risk scoring, multi-platform footprints, and live web OSINT indexing."""
+    """Advanced OSINT adapter for phone number metadata, E.164 normalization, carrier estimation, risk scoring, multi-platform footprints, identity document dorks (Aadhaar/PAN), and live web OSINT indexing."""
 
     COUNTRY_CODES = {
         "91": {"country": "India 🇮🇳", "code": "IN", "region": "South Asia", "currency": "INR", "carrier_hint": "Jio / Airtel / Vi / BSNL"},
@@ -74,6 +74,13 @@ class PhoneAdapter:
         social_dork_url = f"https://www.google.com/search?q=%22{digits_only}%22+site:facebook.com+OR+site:instagram.com+OR+site:twitter.com+OR+site:linkedin.com"
         breach_dork_url = f"https://www.google.com/search?q=%22{digits_only}%22+leak+OR+breach+OR+pastebin"
 
+        # Government & Identity Card OSINT Dorks (Aadhaar / PAN / Voter / GSTIN)
+        aadhaar_dork_url = f"https://www.google.com/search?q=%22{digits_only}%22+%22Aadhaar%22+OR+%22Adhar%22+OR+%22UIDAI%22+OR+%22XXXX%22"
+        pan_dork_url = f"https://www.google.com/search?q=%22{digits_only}%22+%22PAN%22+OR+%22Income+Tax%22+OR+%22NSDL%22+OR+%22ITR%22"
+        voter_dork_url = f"https://www.google.com/search?q=%22{digits_only}%22+%22Voter+ID%22+OR+%22EPIC%22+OR+%22Electoral%22"
+        gstin_dork_url = f"https://www.google.com/search?q=%22{digits_only}%22+%22GSTIN%22+OR+%22UAN%22+OR+%22EPFO%22+OR+%22MSME%22"
+        id_leak_dork_url = f"https://www.google.com/search?q=%22{digits_only}%22+filetype:pdf+OR+filetype:xlsx+OR+site:pastebin.com"
+
         # Risk scoring heuristic
         risk_score = "LOW"
         risk_factors = []
@@ -109,7 +116,13 @@ class PhoneAdapter:
             "google_dork_url": google_dork_url,
             "social_dork_url": social_dork_url,
             "breach_dork_url": breach_dork_url,
-            "live_web_results": []
+            "aadhaar_dork_url": aadhaar_dork_url,
+            "pan_dork_url": pan_dork_url,
+            "voter_dork_url": voter_dork_url,
+            "gstin_dork_url": gstin_dork_url,
+            "id_leak_dork_url": id_leak_dork_url,
+            "live_web_results": [],
+            "extracted_id_cards": []
         }
 
     @classmethod
@@ -122,9 +135,27 @@ class PhoneAdapter:
         query_str = f"{digits_only}"
         web_results = await NewsWebAdapter.search_web(query_str, max_results=5)
         
-        # If no results found with digits_only, try with clean_digits E.164
-        if not web_results and clean_digits != digits_only:
-            web_results = await NewsWebAdapter.search_web(clean_digits, max_results=5)
+        # Also run secondary search for identity card & document footprints
+        id_query_str = f"{digits_only} Aadhaar OR PAN OR Voter OR GST"
+        id_results = await NewsWebAdapter.search_web(id_query_str, max_results=3)
 
-        data["live_web_results"] = web_results
+        # Combine & deduplicate live web findings
+        combined_results = list({r["url"]: r for r in (web_results + id_results)}.values())
+        
+        # Scan snippets for PAN and Aadhaar patterns
+        extracted_ids = []
+        pan_pattern = re.compile(r"\b[A-Z]{5}[0-9]{4}[A-Z]{1}\b")
+        aadhaar_pattern = re.compile(r"\b[2-9]\d{3}[\s\-]?\d{4}[\s\-]?\d{4}\b|\bXXXX[\s\-]?XXXX[\s\-]?\d{4}\b", re.IGNORECASE)
+
+        for res_item in combined_results:
+            text_to_scan = f"{res_item.get('title', '')} {res_item.get('snippet', '')}"
+            pan_matches = pan_pattern.findall(text_to_scan)
+            aadhaar_matches = aadhaar_pattern.findall(text_to_scan)
+            for p in pan_matches:
+                extracted_ids.append(f"PAN: {p}")
+            for a in aadhaar_matches:
+                extracted_ids.append(f"Aadhaar: {a}")
+
+        data["live_web_results"] = combined_results[:6]
+        data["extracted_id_cards"] = list(set(extracted_ids))
         return data
