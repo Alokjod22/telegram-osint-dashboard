@@ -86,6 +86,36 @@ def build_main_keyboard(lang: str = "en"):
     return InlineKeyboardMarkup(keyboard)
 
 
+async def check_user_verification(update: Update) -> bool:
+    """Gatekeeper: Checks if user has tapped 🚀 Start to link/verify their phone number before allowing tool access."""
+    user = update.effective_user
+    if not user:
+        return False
+
+    db_user = await get_user_by_telegram_id(str(user.id))
+    if db_user and (db_user.is_verified or db_user.phone_number):
+        return True
+
+    contact_keyboard = [[KeyboardButton("🚀 Start", request_contact=True)]]
+    contact_markup = ReplyKeyboardMarkup(contact_keyboard, resize_keyboard=True, one_time_keyboard=False)
+
+    lock_msg = f"🔒 *VERIFICATION REQUIRED — ACCESS LOCKED*\n" \
+               f"━━━━━━━━━━━━━━━━━━━━\n\n" \
+               f"👋 Hello *{user.first_name}*!\n\n" \
+               f"⚠️ *1st Priority Requirement*: To use any bot feature (OSINT Search, Phone Lookup, AI Assistant, Abuse Reports), you MUST tap the *🚀 Start* button in the bottom keyboard to verify your account.\n\n" \
+               f"👇 *Tap the 🚀 Start button below now to unlock full access:* "
+
+    if update.message:
+        await update.message.reply_text(lock_msg, parse_mode="Markdown", reply_markup=contact_markup)
+    elif update.callback_query:
+        await update.callback_query.answer("⚠️ Verification Required! Tap 🚀 Start below in your chat keyboard to unlock.", show_alert=True)
+        try:
+            await update.callback_query.message.reply_text(lock_msg, parse_mode="Markdown", reply_markup=contact_markup)
+        except Exception:
+            pass
+    return False
+
+
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if not user:
@@ -102,7 +132,8 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     loc = LOCALES.get(lang, LOCALES["en"])
 
     greeting = loc["greeting_new"].format(first_name=user.first_name) if is_new else loc["greeting_returning"].format(first_name=user.first_name)
-    status_badge = "🛡️ Verified Investigator" if (db_user and db_user.is_verified) else "👤 Standard Member"
+    is_verified = bool(db_user and (db_user.is_verified or db_user.phone_number))
+    status_badge = "🛡️ Verified Investigator" if is_verified else "⏳ Unverified (Tap 🚀 Start Below)"
     custom_welcome = await get_welcome_config("custom_welcome", "")
 
     msg = f"━━━━━━━━━━━━━━━━━━━━\n" \
@@ -131,7 +162,11 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=reply_markup)
 
-    await update.message.reply_text("👇 *Press 🚀 Start below to initialize your bot session:*", reply_markup=contact_markup)
+    if not is_verified:
+        await update.message.reply_text(
+            "👇 *1st Priority Required Step: Tap 🚀 Start below to verify your phone number & unlock all features:*",
+            reply_markup=contact_markup
+        )
 
 
 async def contact_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -139,19 +174,22 @@ async def contact_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if contact and user:
         phone = contact.phone_number
-        await record_user_activity(
+        db_user, _ = await record_user_activity(
             telegram_id=str(user.id),
             username=user.username,
             first_name=user.first_name,
             last_name=user.last_name,
             phone_number=phone
         )
-        msg = f"✅ *Identity & Phone Verified Successfully!*\n\n" \
+        lang = db_user.language_code if db_user else "en"
+        msg = f"🎉 *IDENTITY & PHONE VERIFIED SUCCESSFULLY!*\n\n" \
               f"👤 *Name*: {user.first_name}\n" \
               f"🏷️ *Username*: @{user.username or 'None'}\n" \
-              f"📱 *Phone*: {phone}\n\n" \
-              f"🚀 *Your session is active! You can now run OSINT searches, check /profile, or use /help for command list.*"
-        await update.message.reply_text(msg, parse_mode="Markdown")
+              f"📱 *Phone*: `{phone}`\n\n" \
+              f"🚀 *All Bot Features Unlocked!* You can now run OSINT searches (`/search`), Phone Lookup (`/numinfo`), AI research, and abuse reporting.\n\n" \
+              f"👇 *Tap any feature button below to begin:* "
+        
+        await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=build_main_keyboard(lang))
 
         try:
             from config import settings
@@ -224,6 +262,9 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def reports_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await check_user_verification(update):
+        return
+
     user = update.effective_user
     if not user:
         return
@@ -268,6 +309,9 @@ async def setlimit_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def search_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await check_user_verification(update):
+        return
+
     user = update.effective_user
     if user:
         await record_user_activity(
@@ -343,6 +387,9 @@ async def search_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def numinfo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await check_user_verification(update):
+        return
+
     user = update.effective_user
     if user:
         await record_user_activity(
@@ -406,6 +453,9 @@ async def numinfo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def report_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await check_user_verification(update):
+        return
+
     user = update.effective_user
     if user:
         report_stats = await get_user_report_stats(str(user.id))
@@ -503,9 +553,14 @@ async def editbanner_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user = update.effective_user
+    data = query.data
+
+    if data not in ("menu_home", "menu_lang") and not data.startswith("lang_"):
+        if not await check_user_verification(update):
+            return
+
     await query.answer()
 
-    data = query.data
     nav_back_home = [
         [InlineKeyboardButton("⬅️ Back to Menu", callback_data="menu_home"), InlineKeyboardButton("🏠 Main Menu", callback_data="menu_home")]
     ]
